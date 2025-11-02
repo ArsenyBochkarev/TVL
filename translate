@@ -1,0 +1,2 @@
+#!/bin/bash
+sbt "runMain Translator.main $1 $2" # TODO: add "-o" flag
