@@ -53,6 +53,6 @@ build/
 hs_err_pid*
 
 ### ANTLR4 files ###
-src/main/scala/Translator/Grammar/*.java
-src/main/scala/Translator/Grammar/*.tokens
-src/main/scala/Translator/Grammar/*.interp
+src/main/scala/Grammar/*.java
+src/main/scala/Grammar/*.tokens
+src/main/scala/Grammar/*.interp
