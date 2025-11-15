@@ -34,9 +34,10 @@ msg_name: IDENTIFIER;
 
 // receive <msg name> from <actor name>
 receive_stmt: RECEIVE msg_name FROM actor_name;
-// receive alts { <msg name> from <actor name> => { ... } ... }
-receive_alts_stmt: RECEIVE ALTS '{' (receive_case)+ '}';
+// receive alts { <msg name> from <actor name> => { ... }... }
+receive_alts_stmt: RECEIVE ALTS '{' (receive_case)+ (otherwise_case)? '}';
 receive_case: msg_name FROM actor_name '=>' block;
+otherwise_case: OTHERWISE '=>' block;
 
 // choose { ... } or { ... }...
 choose_stmt: CHOOSE block (OR block)+;
@@ -60,6 +61,7 @@ TO: 'to';
 RECEIVE: 'receive';
 FROM: 'from';
 ALTS: 'alts';
+OTHERWISE: 'otherwise';
 CHOOSE: 'choose';
 OR: 'or';
 REPEAT: 'repeat';
