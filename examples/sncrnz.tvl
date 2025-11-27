@@ -1,0 +1,20 @@
+module Test
+
+actor R1 {
+    send Y to R3
+    send X to R2
+}
+
+actor R2 {
+    receive X from R1
+    send X to R3
+}
+
+actor R3 {
+    repeat {
+        receive alts {
+            X from R2 => { break }
+            Y from R1 => { skip }
+        }
+    }
+}

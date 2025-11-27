@@ -38,11 +38,11 @@ fair process R3 = "R3"
 begin
 Loop:
     while TRUE do
-        either \* case X<<R2: break
+        either
             await r23 /= <<>>;
             r23 := Tail(r23);
             goto End_R3;
-        or \* case Y<<R1
+        or
             await r13 /= <<>>;
             r13 := Tail(r13);
             mes := TRUE;
