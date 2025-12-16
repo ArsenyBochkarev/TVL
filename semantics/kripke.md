@@ -126,7 +126,7 @@
         - ∃ `N+1` переходов, `∀i=0..N`:
           - `n` = `parallel { s_1 } and ... and { s_i' } and ... and { s_N }; P` (продвигаемся по текущей ветке)
           - `n` = `parallel { s_1 } and ... and { s_j } and ... and { s_N }; P`, где `j=1..i-1,i+1..N` (interleaving)
-      - Исполнение всех веток `parallel` завершилось:
-        - `cond` = `stepInsideScope(parallel, s_i) = s_i' && s_i' == nil`
+      - Исполнение всех веток `parallel` завершилось или мы встретили `break`:
+        - `cond` = `(stepInsideScope(parallel, s_i) = s_i' && s_i' == nil) || (stepInsideScope(parallel, s_i) = s_i' && s_i' == break)`
         - `n` = `P`
 - `F` -- множество конечных состояний
