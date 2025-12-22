@@ -9,7 +9,7 @@ def parse(input: String, output: String): Unit = {
   val parser = new TVLParser(tokens)
   val tree = parser.program()
 
-  val visitor = new ASTVisitor(output)
+  val visitor = new ASTVisitor(true)
   visitor.visitProgram(tree)
 }
 
