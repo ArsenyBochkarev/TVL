@@ -12,7 +12,7 @@ case class IRQueuePop(id: Int, next: Int, queueName: String, msg: String) extend
   override def successors: List[Int] = List(next)
 case class IRJump(id: Int, target: Int) extends IRInstruction:
   override def successors: List[Int] = List(target)
-case class IRJumpGuard(id: Int, next: Int, guardVarName: String, target: Int) extends IRInstruction:
+case class IRJumpGuard(id: Int, next: Int, guardVarName: String, target: Int, iterations: Int) extends IRInstruction:
   override def successors: List[Int] = List(target, next)
 case class IRSkip(id: Int, next: Int) extends IRInstruction:
   override def successors: List[Int] = List(next)

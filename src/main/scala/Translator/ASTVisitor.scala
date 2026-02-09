@@ -11,6 +11,7 @@ class ASTVisitor(val debug: Boolean = false) {
   private var pcCounter = 0
   private def nextId(): Int = { pcCounter += 1; pcCounter }
   private val actorProcedures = mutable.Map[String, mutable.Map[Int, IRInstruction]]()
+  def getIR: mutable.Map[String, mutable.Map[Int, IRInstruction]] = actorProcedures
   // Instruction IDs after current break/parallel block
   private val breakStack = mutable.Stack[Int]()
 
@@ -110,7 +111,8 @@ class ASTVisitor(val debug: Boolean = false) {
         // Countable loop
         val bodyEnd = translateBlock(r.block(), actor, loopStart)
         val guardVar = getGuardVarName(bodyEnd, actor)
-        val jumpGuardInstr = IRJumpGuard(bodyEnd, afterLoop, guardVar, loopStart)
+        val iterations = r.NUMBER().getText.toInt // TODO: throw proper error here if no Int was detected
+        val jumpGuardInstr = IRJumpGuard(bodyEnd, afterLoop, guardVar, loopStart, iterations)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpGuardInstr)
       } else {
         // Uncountable loop
@@ -195,7 +197,7 @@ class ASTVisitor(val debug: Boolean = false) {
     case IRQueuePop(_, next, q, m) => s"POP $m from $q"
     case IRChoice(_, _) => "CHOICE"
     case IRJump(_, _) => s"JUMP"
-    case IRJumpGuard(_, n, v, t) => s"JUMP TO [$t] IF $v > 0, ELSE to [$n]"
+    case IRJumpGuard(_, n, v, t, _) => s"JUMP TO [$t] IF $v > 0, ELSE to [$n]"
     case IREnd(_) => ""
     case IRSkip(_, _) => "SKIP"
     case _ =>
