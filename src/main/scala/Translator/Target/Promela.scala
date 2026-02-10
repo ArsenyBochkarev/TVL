@@ -49,6 +49,7 @@ class Promela extends TargetTranslator {
   }
 
   private def translateActor(name: String, instructions: mutable.Map[Int, IRInstruction]): String = {
+    var parallelBlockNum: Int = -1 // If multiple parallel blocks were used in current actor
     val sb = new StringBuilder()
     sb.append(s"proctype $name() {\n")
 
@@ -57,10 +58,16 @@ class Promela extends TargetTranslator {
     guardVars.foreach { (v, n) =>
       sb.append(indent + s"int $v = $n;\n")
     }
-    if (guardVars.nonEmpty) sb.append("\n")
-
-    // Remember all parallel branches
-    val parallelCtxMap = analyzeParallelBranches(instructions)
+    // Declare scheduler helper variables
+    val schedulerVars = collectSchedVars(instructions.values)
+    var i: Int = 0
+    // Each parallel block should have `n` helper variables
+    schedulerVars.foreach { n =>
+      for (j <- 1 to n)
+        sb.append(indent + s"int sched_${i}_$j = 1;\n")
+      i += 1
+    }
+    if (guardVars.nonEmpty || schedulerVars.nonEmpty) sb.append("\n")
 
     // Traverse all instructions, translating them (almost) independently
     val sortedIds = instructions.keys.toSeq.sorted
@@ -68,29 +75,35 @@ class Promela extends TargetTranslator {
       sb.append(s"L_$id: ")
       val instr = instructions(id)
       instr match {
-        case IRQueuePush(_, next, q, msg) =>
-          sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}\n")
+        case IRQueuePush(_, s, next, q, msg) =>
+          if isParallel(instr) then
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(parallelBlockNum, s._2)}; goto ${s._1}\n")
+          else
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}\n")
 
-        case IRQueuePop(_, next, q, msg) =>
-          sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}\n")
+        case IRQueuePop(_, s, next, q, msg) =>
+          if isParallel(instr) then
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)}; goto $s\n")
+          else
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}\n")
 
-        case IRJump(_, target) =>
+        case IRJump(_, _, target) =>
           sb.append(s"goto L_$target;\n")
 
-        case IRJumpGuard(_, next, guardVar, target, _) =>
+        case IRJumpGuard(_, _, next, guardVar, target, _) =>
           sb.append(s"if\n")
           sb.append(indent * 2 + s":: $guardVar > 0 -> $guardVar = $guardVar - 1; goto L_$target;\n")
           sb.append(indent * 2 + s":: else -> goto L_$next;\n")
           sb.append(indent + s"fi;\n")
 
-        case IRChoice(_, branches) =>
+        case IRChoice(_, _, branches) =>
           sb.append("if\n")
           branches.foreach { b =>
             sb.append(indent * 2 + s":: true -> goto L_$b;\n")
           }
           sb.append(indent + "fi;\n")
 
-        case IRBranch(_, cases, otherwise) =>
+        case IRBranch(_, _, cases, otherwise) =>
           sb.append("if\n")
           cases.foreach { c =>
             sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> goto L_${c.bodyStart};\n")
@@ -98,22 +111,24 @@ class Promela extends TargetTranslator {
           // TODO: otherwise
           sb.append(indent + "fi;\n")
 
-        case IRSkip(_, next) =>
+        case IRSkip(_, _, next) =>
           sb.append(s"skip\n")
 
         // TODO: add scheduler loop
-        case IRParallelExec(_, branches, breakExit) =>
+        // We'll probably need to change semantics due to unknown to scheduler path in choice/branch/etc
+        case IRParallelExec(_, _, branches, breakExit) =>
+          parallelBlockNum += 1
           sb.append("if\n")
           branches.foreach { b =>
             sb.append(indent * 2 + s":: true -> goto L_$b;\n")
           }
           sb.append(indent + "fi;\n")
 
-        case IRParallelEnd(_, joinPc) =>
+        case IRParallelEnd(_, _, joinPc) =>
           sb.append(s"goto L_$joinPc;\n")
 
-        case IREnd(_) =>
-          sb.append("goto L_END_ACTOR;\n") // Заглушка
+        case IREnd(_, _) =>
+          sb.append("goto L_END_ACTOR;\n")
       }
     }
 
@@ -128,13 +143,13 @@ class Promela extends TargetTranslator {
     val queues = mutable.Set[String]()
 
     actors.values.foreach(_.values.foreach {
-      case IRQueuePush(_, _, q, m) =>
+      case IRQueuePush(_, _, _, q, m) =>
         queues.add(q)
         messages.add(m)
-      case IRQueuePop(_, _, q, m) =>
+      case IRQueuePop(_, _, _, q, m) =>
         queues.add(q)
         messages.add(m)
-      case IRBranch(_, cases, _) =>
+      case IRBranch(_, _, cases, _) =>
         cases.foreach { c =>
           queues.add(c.queueName)
           messages.add(c.msg)
@@ -146,45 +161,18 @@ class Promela extends TargetTranslator {
   // Guard vars for loops
   private def collectGuardVars(instrs: Iterable[IRInstruction]): Set[(String, Int)] = {
     instrs.collect {
-      case IRJumpGuard(_, _, v, _, i) => (v, i)
+      case IRJumpGuard(_, _, _, v, _, i) => (v, i)
     }.toSet
   }
-  // We'll need to patch `next` field in a DAG for instructions executed in parallel
-  private def analyzeParallelBranches(instrs: mutable.Map[Int, IRInstruction]): Map[Int, ParallelContext] = {
-    val result = mutable.Map[Int, ParallelContext]()
-    instrs.values.collect { case p: IRParallelExec => p }.foreach { parInstr =>
-      val schedLabel = s"L_SCHED_${parInstr.id}"
-
-      parInstr.branches.zipWithIndex.foreach { case (startBranchId, index) =>
-        val pcVar = s"pc_par_${parInstr.id}_$index"
-        val ctx = ParallelContext(schedLabel, pcVar)
-
-        val queue = mutable.Queue[Int](startBranchId)
-        val visited = mutable.Set[Int]()
-        // BFS
-        while (queue.nonEmpty) {
-          val currId = queue.dequeue()
-
-          if (instrs.contains(currId) && !visited.contains(currId)) {
-            visited.add(currId)
-            val currInstr = instrs(currId)
-            result(currId) = ctx
-
-            currInstr match {
-              case _: IRParallelEnd => // Stop for end of parallel branch
-              // Note: no nested parallel blocks is allowed
-              case _ =>
-                currInstr.successors.foreach { succ =>
-                  if (!visited.contains(succ)) queue.enqueue(succ)
-                }
-            }
-          }
-        }
-      }
-    }
-    result.toMap
+  // Scheduler vars for parallel blocks
+  private def collectSchedVars(instrs: Iterable[IRInstruction]): List[Int] = {
+    instrs.collect {
+      case IRParallelExec(_, _, b, _) => b.size
+    }.toList
   }
 
   private def getMsgName(m: String): String = s"MSG_$m"
   private def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
+  private def getSchedVarName(parallelBlockNum: Int, branchNum: Int): String =
+    s"sched_${parallelBlockNum}_$branchNum"
 }
