@@ -141,7 +141,7 @@ class ASTVisitor(val debug: Boolean = false) {
       val branchStarts = branches.map(_ => nextId()).toList
       val joinPc = nextId()
 
-      scheduler = (currentPc, 0)
+      scheduler = (-1, 0)
       val parallelExecInstr = IRParallelExec(currentPc, scheduler, branchStarts, joinPc)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, parallelExecInstr)
 
