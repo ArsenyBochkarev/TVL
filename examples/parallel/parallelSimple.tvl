@@ -1,0 +1,26 @@
+module Test
+
+actor R1 {
+    receive X1 from R3
+    receive X2 from R3
+}
+
+actor R2 {
+    receive Y1 from R3
+    receive Y2 from R3
+}
+
+actor R3 {
+    parallel {
+        send X1 to R1
+        send X2 to R1
+    } and {
+        send Y1 to R2
+        send Y2 to R2
+    }
+    send Z to R4
+}
+
+actor R4 {
+    receive Z from R3
+}

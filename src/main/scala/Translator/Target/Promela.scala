@@ -35,7 +35,6 @@ class Promela extends TargetTranslator {
       sb.append("\n")
     }
 
-    // Init
     sb.append("/* Initialization */\n")
     sb.append("init {\n")
     sb.append(indent + "atomic {\n")
@@ -60,12 +59,10 @@ class Promela extends TargetTranslator {
     }
     // Declare scheduler helper variables
     val schedulerVars = collectSchedVars(instructions.values)
-    var i: Int = 0
     // Each parallel block should have `n` helper variables
-    schedulerVars.foreach { n =>
-      for (j <- 1 to n)
-        sb.append(indent + s"int sched_${i}_$j = 1;\n")
-      i += 1
+    schedulerVars.foreach { (schedulerPc, numBranches) =>
+      for (j <- 1 to numBranches)
+        sb.append(indent + s"int ${getSchedVarName(schedulerPc, j)} = 1;\n")
     }
     if (guardVars.nonEmpty || schedulerVars.nonEmpty) sb.append("\n")
 
@@ -77,62 +74,106 @@ class Promela extends TargetTranslator {
       instr match {
         case IRQueuePush(_, s, next, q, msg) =>
           if isParallel(instr) then
-            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(parallelBlockNum, s._2)}; goto ${s._1}\n")
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next; goto L_${s._1}\n")
           else
-            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}\n")
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; goto L_$next\n")
 
         case IRQueuePop(_, s, next, q, msg) =>
           if isParallel(instr) then
-            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)}; goto $s\n")
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next; goto L_${s._1}\n")
           else
-            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}\n")
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; goto L_$next\n")
 
         case IRJump(_, _, target) =>
           sb.append(s"goto L_$target;\n")
 
-        case IRJumpGuard(_, _, next, guardVar, target, _) =>
-          sb.append(s"if\n")
-          sb.append(indent * 2 + s":: $guardVar > 0 -> $guardVar = $guardVar - 1; goto L_$target;\n")
-          sb.append(indent * 2 + s":: else -> goto L_$next;\n")
-          sb.append(indent + s"fi;\n")
+        case IRJumpGuard(_, s, next, guardVar, target, _) =>
+          if isParallel(instr) then
+            sb.append(indent + s"if\n")
+            sb.append(indent * 2 + s":: $guardVar > 0 -> $guardVar = $guardVar - 1; ${getSchedVarName(s._1, s._2)} = $target; goto L_${s._1}\n")
+            sb.append(indent * 2 + s":: else -> ${getSchedVarName(s._1, s._2)} = $next; goto L_${s._1}\n")
+            sb.append(indent + s"fi;\n")
+          else
+            sb.append(indent + s"if\n")
+            sb.append(indent * 2 + s":: $guardVar > 0 -> $guardVar = $guardVar - 1; goto L_$target;\n")
+            sb.append(indent * 2 + s":: else -> goto L_$next;\n")
+            sb.append(indent + s"fi;\n")
 
-        case IRChoice(_, _, branches) =>
+        case IRChoice(_, s, branches) =>
           sb.append("if\n")
           branches.foreach { b =>
-            sb.append(indent * 2 + s":: true -> goto L_$b;\n")
+            if isParallel(instr) then
+              sb.append(indent * 2 + s":: true -> ${getSchedVarName(s._1, s._2)} = $b; goto L_${s._1}\n")
+            else
+              sb.append(indent * 2 + s":: true -> goto L_$b;\n")
           }
           sb.append(indent + "fi;\n")
 
-        case IRBranch(_, _, cases, otherwise) =>
-          sb.append("if\n")
-          cases.foreach { c =>
-            sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> goto L_${c.bodyStart};\n")
-          }
+        case IRBranch(_, s, cases, otherwise) =>
+          if isParallel(instr) then
+            sb.append("if\n")
+            cases.foreach { c =>
+              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> ${getSchedVarName(s._1, s._2)} = ${c.bodyStart}; goto L_${s._1}\n")
+            }
+            sb.append(indent + "fi;\n")
+          else
+            sb.append("if\n")
+            cases.foreach { c =>
+              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> goto L_${c.bodyStart};\n")
+            }
+            sb.append(indent + "fi;\n")
           // TODO: otherwise
-          sb.append(indent + "fi;\n")
 
         case IRSkip(_, _, next) =>
-          sb.append(s"skip\n")
+          sb.append(s"skip; goto L_$next\n")
 
-        // TODO: add scheduler loop
-        // We'll probably need to change semantics due to unknown to scheduler path in choice/branch/etc
-        case IRParallelExec(_, _, branches, breakExit) =>
+        case IRParallelExec(schedulerPc, _, branches, breakExit) =>
           parallelBlockNum += 1
           sb.append("if\n")
+          var branchNumber = 1
           branches.foreach { b =>
-            sb.append(indent * 2 + s":: true -> goto L_$b;\n")
+            // Parallel branch choice
+            sb.append(indent * 2 + s":: ${getSchedVarName(schedulerPc, branchNumber)} != 0 ->\n")
+
+            // Set correct step for current branch
+            sb.append(indent * 3 + "if\n")
+            sb.append(indent * 3 + s":: ${getSchedVarName(schedulerPc, branchNumber)} == 1 -> goto L_$b\n")
+            // Traverse CFG until IRParallelEnd (BFS)
+            val branchStart = instructions(b)
+            val visited = mutable.Set[Int]()
+            val queue = mutable.Queue[Int]()
+            branchStart.successors.foreach { succ =>
+              if (!visited.contains(succ) && !branchStart.isInstanceOf[IRParallelEnd])
+                queue.enqueue(succ)
+            }
+            while (queue.nonEmpty) {
+              val succId = queue.dequeue()
+              if (!visited.contains(succId) && instructions.contains(succId)) {
+                visited.add(succId)
+                val nextInstr = instructions(succId)
+                sb.append(indent * 3 + s":: ${getSchedVarName(schedulerPc, branchNumber)} == ${nextInstr.id} -> goto L_${nextInstr.id}\n")
+
+                nextInstr.successors.foreach { succ =>
+                  if (!visited.contains(succ) && !nextInstr.isInstanceOf[IRParallelEnd])
+                    queue.enqueue(succ)
+                }
+              }
+            }
+            branchNumber += 1
+            sb.append(indent * 3 + "fi\n")
           }
+          sb.append(indent * 2 + s":: else -> goto L_$breakExit\n")
           sb.append(indent + "fi;\n")
 
-        case IRParallelEnd(_, _, joinPc) =>
-          sb.append(s"goto L_$joinPc;\n")
+        case IRParallelEnd(_, s, joinPc) =>
+          sb.append(s"${getSchedVarName(s._1, s._2)} = 0; goto L_${s._1}\n")
 
         case IREnd(_, _) =>
-          sb.append("goto L_END_ACTOR;\n")
+          sb.append(s"goto L_END_ACTOR_$name\n")
       }
     }
 
-    sb.append("L_END_ACTOR: skip;\n")
+    sb.append(s"L_END_ACTOR_$name: skip;\n")
     sb.append("}\n")
     sb.toString()
   }
@@ -165,14 +206,14 @@ class Promela extends TargetTranslator {
     }.toSet
   }
   // Scheduler vars for parallel blocks
-  private def collectSchedVars(instrs: Iterable[IRInstruction]): List[Int] = {
+  private def collectSchedVars(instrs: Iterable[IRInstruction]): List[(Int, Int)] = {
     instrs.collect {
-      case IRParallelExec(_, _, b, _) => b.size
+      case IRParallelExec(schedulerPc, _, b, _) => (schedulerPc, b.size)
     }.toList
   }
 
   private def getMsgName(m: String): String = s"MSG_$m"
   private def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
   private def getSchedVarName(parallelBlockNum: Int, branchNum: Int): String =
-    s"sched_${parallelBlockNum}_$branchNum"
+    s"sched_block${parallelBlockNum}_branch$branchNum"
 }

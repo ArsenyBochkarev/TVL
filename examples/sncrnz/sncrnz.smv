@@ -1,0 +1,63 @@
+-- We send only X(=1) or Y(=2)
+
+MODULE Buffer(write_en, read_en, input_val)
+VAR
+    buffer : array 0..1 of {0, 1, 2}; -- 0=NONE, 1=X, 2=Y
+    count : 0..2;
+
+ASSIGN
+    init(count) := 0;
+    init(buffer[0]) := 0;
+    init(buffer[1]) := 0;
+
+    next(count) := case
+        write_en & !read_en & count < 2 : count + 1;
+        !write_en & read_en & count > 0 : count - 1;
+        TRUE : count;
+    esac;
+
+    next(buffer[0]) := case
+        read_en & count = 0 : buffer[1];
+        -- Write to empty
+        write_en & !read_en & count = 0 : input_val;
+        TRUE : buffer[0];
+    esac;
+
+    next(buffer[1]) := case
+        write_en & !read_en & count = 1 : input_val;
+        -- Write NONE to index 1
+        read_en & count = 1 : 0;
+        TRUE : buffer[1];
+    esac;
+
+DEFINE
+    is_empty := (count = 0);
+    is_full  := (count = 2);
+    head     := buffer[0];
+
+-- actor R2 {
+--     receive X from R1
+--     send X to R3
+-- }
+MODULE R2(q_in_R1, q_out_R3)
+VAR
+    pc : {L_START, L_RECV_X, L_SEND_X, L_DONE};
+
+DEFINE
+    MSG_X := 1;
+
+    received_x := (pc = L_RECV_X) & (!q_in_R1.is_empty) & (q_in_R1.head = MSG_X);
+    can_send_x := (pc = L_SEND_X) & (!q_out_R3.is_full);
+
+ASSIGN
+    init(pc) := L_START;
+
+    next(pc) := case
+        pc = L_START : L_RECV_X;
+        received_x   : L_SEND_X;
+        can_send_x   : L_DONE;
+        TRUE         : pc;
+    esac;
+
+    read_R1  := received_x; -- Delete X from R1 queue
+    write_R3 := can_send_x; -- Add X to R3 queue

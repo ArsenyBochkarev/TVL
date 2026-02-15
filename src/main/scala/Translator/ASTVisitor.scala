@@ -205,7 +205,7 @@ class ASTVisitor(val debug: Boolean = false) {
     case IRJump(_, _, _) => s"JUMP"
     case IRJumpGuard(_, _, n, v, t, _) => s"JUMP TO [$t] IF $v > 0, ELSE to [$n]"
     case IREnd(_, _) => ""
-    case IRSkip(_, _, _) => "SKIP"
+    case IRSkip(_, _, _) => "SKIP" // TODO: add 'skip' to grammar
     case _ =>
       val succ = if (i.successors.nonEmpty) s" -> [${i.successors.mkString(", ")}]" else ""
       s"${i.getClass.getSimpleName.replace("IR", "")}$succ"
