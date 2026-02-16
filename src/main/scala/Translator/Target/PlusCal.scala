@@ -11,9 +11,9 @@ class PlusCal extends TargetTranslator {
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
 
-    sb.append("----------------------------- MODULE System -----------------------------\n")
+    sb.append("----------------------------- MODULE test -----------------------------\n")
     sb.append("EXTENDS Naturals, Sequences, TLC\n\n")
-    sb.append("(* --algorithm System\n")
+    sb.append("(* --algorithm test\n")
 
     sb.append("variables\n")
     val queues = collectGlobalInfo(actors)
@@ -38,213 +38,169 @@ class PlusCal extends TargetTranslator {
     val sb = new StringBuilder()
     sb.append(s"process $name = \"$name\"\n")
 
+    // Tmp variable. TODO: check if we really need it
     sb.append("variables\n")
-    sb.append(s"${indent}cur_msg = \"\",\n") // Tmp variable. TODO: check if we really need it
+    sb.append(indent + s"cur_msg = \"\",\n")
+    // Declare loop guards
     val guardVars = collectGuardVars(instructions.values)
-    guardVars.foreach { (v, n) => sb.append(s"$indent$v = $n,\n") }
-
-    val (parallelMap, containedIds) = analyzeParallelStructure(instructions)
-    // PC variables for parallel blocks
-    // parallelMap: ParallelID -> List[BranchIndex, StartID]
-    parallelMap.foreach { case (parId, branches) =>
-      branches.indices.foreach { idx =>
-        sb.append(s"${indent}pc_par_${parId}_$idx = 0,\n")
-      }
+    guardVars.foreach { (v, n) =>
+      sb.append(indent + s"$v = $n,\n")
+    }
+    // Declare scheduler helper variables
+    val schedulerVars = collectSchedVars(instructions.values)
+    // Each parallel block should have `n` helper variables
+    schedulerVars.foreach { (schedulerPc, numBranches) =>
+      for (j <- 1 to numBranches)
+        sb.append(indent + s"${getSchedVarName(schedulerPc, j)} = 1,\n")
     }
     if (sb.endsWith(",\n")) sb.setLength(sb.length - 2)
+    if (guardVars.nonEmpty || schedulerVars.nonEmpty) sb.append("\n")
+
     sb.append(";\n")
     sb.append("begin\n")
 
+    // Traverse all instructions, translating them (almost) independently
     val sortedIds = instructions.keys.toSeq.sorted
     sortedIds.foreach { id =>
+      sb.append(s"L_$id:\n")
       val instr = instructions(id)
-      if (!isParallel(instr)) {
-        sb.append(s"L_$id:\n")
+      instr match {
+        case IRQueuePush(_, s, next, q, msg) =>
+          val qName = getChannelName(q)
+          val queue = s"queues[\"$qName\"]"
+          if isParallel(instr) then
+            sb.append(s"$queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
+          else
+            sb.append(indent + s"$queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
 
-        instr match {
-          case IRParallelExec(_, s, branches, breakExit) =>
-            branches.zipWithIndex.foreach { case (startId, idx) =>
-              sb.append(s"${indent}pc_par_${id}_$idx := $startId;\n")
+        case IRQueuePop(_, s, next, q, msg) =>
+          val qName = getChannelName(q)
+          val queue = s"queues[\"$qName\"]"
+          if isParallel(instr) then
+            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
+            sb.append(indent + s"cur_msg := Head($queue); $queue := Tail($queue);\n")
+            sb.append(indent + s"${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1}\n")
+          else
+            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
+            sb.append(indent + s"cur_msg := Head($queue); $queue := Tail($queue);\n")
+            sb.append(indent + s"goto L_$next;\n")
+
+        case IRJump(_, _, target) =>
+          sb.append(s"goto L_$target;\n")
+
+        case IRJumpGuard(_, s, next, guardVar, target, _) =>
+          if isParallel(instr) then
+            sb.append(indent + s"if $guardVar > 0 then\n")
+            sb.append(indent * 2 + s"$guardVar := $guardVar - 1;\n")
+            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $target; goto L_${s._1}\n")
+            sb.append(indent + s"else\n")
+            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1}\n")
+            sb.append(indent + s"end if;\n")
+          else
+            sb.append(indent + s"if $guardVar > 0 then\n")
+            sb.append(indent * 2 + s"$guardVar := $guardVar - 1;\n")
+            sb.append(indent * 2 + s"goto L_$target;\n")
+            sb.append(indent + s"else\n")
+            sb.append(indent * 2 + s"goto L_$next;\n")
+            sb.append(indent + s"end if;\n")
+
+        case IRChoice(_, s, branches) =>
+          sb.append(indent + s"either\n")
+          if isParallel(instr) then
+            branches.zipWithIndex.foreach { case (b, i) =>
+              if (i > 0) sb.append(indent + s"or\n")
+              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := $b; goto L_${s._1}\n")
             }
-
-            val schedLabel = s"L_SCHED_$id"
-            sb.append(s"$schedLabel:\n")
-
-            val activeCond = branches.indices.map(i => s"pc_par_${id}_$i /= 0").mkString(" \\/ ")
-            sb.append(s"${indent}while ($activeCond) do\n")
-            sb.append(s"$indent${indent}either\n")
-
-            branches.indices.foreach { idx =>
-              if (idx > 0) sb.append(s"$indent${indent}or\n")
-
-              val pcVar = s"pc_par_${id}_$idx"
-              sb.append(s"$indent$indent${indent}await $pcVar /= 0;\n")
-
-              // Switch for parallel branch instructions
-              // TODO: scheduler loop
-//              val branchInstrIds = getBranchInstructions(id, idx, instructions)
-//              sb.append(s"$indent$indent${indent}if $pcVar = ${branchInstrIds.head} then\n")
-//              translateParInstr(branchInstrIds.head, instructions, pcVar, indent * 5, sb)
-//
-//              branchInstrIds.tail.foreach { bId =>
-//                sb.append(s"$indent$indent${indent}elsif $pcVar = $bId then\n")
-//                translateParInstr(bId, instructions, pcVar, indent * 5, sb)
-//              }
-//              sb.append(s"$indent$indent${indent}end if;\n")
+          else
+            branches.zipWithIndex.foreach { case (b, i) =>
+              if (i > 0) sb.append(indent + s"or\n")
+              sb.append(indent * 2 + s"goto L_$b;\n")
             }
+          sb.append(indent + s"end either;\n")
 
-            sb.append(s"$indent${indent}end either;\n")
-            sb.append(s"${indent}end while;\n")
-            sb.append(s"${indent}goto L_$breakExit;\n")
+        case IRBranch(_, s, cases, otherwise) =>
+          sb.append(indent + "either\n")
+          if isParallel(instr) then
+            cases.zipWithIndex.foreach { case (c, i) =>
+              if (i > 0) sb.append(indent + s"or\n")
+              val qName = getChannelName(c.queueName)
+              val queue = s"queues[\"$qName\"]"
+              sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
+              sb.append(indent * 2 + s"cur_msg := Head(queue); $queue := Tail(queue);\n")
+              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart}; goto L_${s._1};\n")
+            }
+          else
+            cases.zipWithIndex.foreach { case (c, i) =>
+              if (i > 0) sb.append(indent + s"or\n")
+              val qName = getChannelName(c.queueName)
+              val queue = s"queues[\"$qName\"]"
+              sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
+              sb.append(indent * 2 + s"cur_msg := Head(queue);\n")
+              sb.append(indent * 2 + s"$queue := Tail(queue);\n")
+              sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
+            }
+          sb.append(indent + "end either;\n")
+        // TODO: otherwise
 
-          case _ => translateInstr(instr, indent, sb)
-        }
+        case IRSkip(_, _, next) =>
+          sb.append(s"skip; goto L_$next\n;")
+
+        case IRParallelExec(schedulerPc, _, branches, breakExit) =>
+          sb.append(indent + "either\n")
+          var branchNumber = 1
+          branches.zipWithIndex.foreach { (b, i) =>
+            if (i > 0) sb.append(indent + "or\n")
+            // Parallel branch choice
+            sb.append(indent * 2 + s"await ${getSchedVarName(schedulerPc, branchNumber)} /= 0;\n")
+
+            // Set correct step for current branch
+            sb.append(indent * 2 + "either\n")
+            sb.append(indent * 3 + s"await ${getSchedVarName(schedulerPc, branchNumber)} = 1; goto L_$b;\n")
+            // Traverse CFG until IRParallelEnd (BFS)
+            val branchStart = instructions(b)
+            val visited = mutable.Set[Int]()
+            val queue = mutable.Queue[Int]()
+            branchStart.successors.foreach { succ =>
+              if (!visited.contains(succ) && !branchStart.isInstanceOf[IRParallelEnd])
+                queue.enqueue(succ)
+            }
+            while (queue.nonEmpty) {
+              val succId = queue.dequeue()
+              if (!visited.contains(succId) && instructions.contains(succId)) {
+                visited.add(succId)
+                val nextInstr = instructions(succId)
+                sb.append(indent * 2 + "or\n")
+                sb.append(indent * 3 + s"await ${getSchedVarName(schedulerPc, branchNumber)} = ${nextInstr.id}; goto L_${nextInstr.id};\n")
+
+                nextInstr.successors.foreach { succ =>
+                  if (!visited.contains(succ) && !nextInstr.isInstanceOf[IRParallelEnd])
+                    queue.enqueue(succ)
+                }
+              }
+            }
+            branchNumber += 1
+            sb.append(indent * 2 + "end either;\n")
+          }
+          sb.append(indent + "or\n")
+          sb.append(indent * 2 + "await ")
+          for (bn <- 1 until branchNumber)
+            sb.append(s"${getSchedVarName(schedulerPc, branchNumber)} = 0 $and ")
+          sb.append("TRUE;\n") // TODO: we can actually dispose of this
+          sb.append(indent * 2 + s"goto L_$breakExit;\n")
+          sb.append(indent + "end either;\n")
+
+        case IRParallelEnd(_, s, joinPc) =>
+          sb.append(s"${getSchedVarName(s._1, s._2)} := 0; goto L_${s._1};\n")
+
+        case IREnd(_, _) =>
+          sb.append(s"goto L_END_ACTOR_$name;\n")
       }
     }
 
-    sb.append("L_END_ACTOR:\n")
+    sb.append(s"L_END_ACTOR_$name:\n")
     sb.append(s"${indent}skip;\n")
     sb.append("end process;\n\n")
     sb.toString()
-  }
-
-  /**
-   * Non-parallel instruction translation
-   */
-  private def translateInstr(instr: IRInstruction, indent: String, sb: StringBuilder): Unit = {
-    instr match {
-      case IRQueuePush(_, _, next, q, msg) =>
-        val qName = getChannelName(q)
-        val queue = s"queues[\"$qName\"]"
-        sb.append(s"$indent$queue := Append($queue, \"${getMsgName(msg)}\");\n")
-        sb.append(s"${indent}goto L_$next;\n")
-
-      case IRQueuePop(_, _, next, q, msg) =>
-        val qName = getChannelName(q)
-        val queue = s"queues[\"$qName\"]"
-        sb.append(s"${indent}await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
-        sb.append(s"${indent}cur_msg := Head($queue);\n")
-        sb.append(s"$indent$queue := Tail($queue);\n")
-        sb.append(s"${indent}goto L_$next;\n")
-
-      case IRBranch(_, _, cases, otherwise) =>
-        sb.append(s"${indent}either\n")
-        cases.zipWithIndex.foreach { case (c, i) =>
-          if (i > 0) sb.append(s"${indent}or\n")
-          val qName = getChannelName(c.queueName)
-          val queue = s"queues[\"$qName\"]"
-          sb.append(s"$indent${indent}await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
-          sb.append(s"$indent${indent}cur_msg := Head(queue);\n")
-          sb.append(s"$indent$indent$queue := Tail(queue);\n")
-          sb.append(s"$indent${indent}goto L_${c.bodyStart};\n")
-        }
-        sb.append(s"${indent}end either;\n")
-        // TODO: otherwise
-
-      case IRJumpGuard(_, _, next, v, target, _) =>
-        sb.append(s"${indent}if $v > 0 then\n")
-        sb.append(s"$indent$indent$v := $v - 1;\n")
-        sb.append(s"$indent${indent}goto L_$target;\n")
-        sb.append(s"${indent}else\n")
-        sb.append(s"$indent${indent}goto L_$next;\n")
-        sb.append(s"${indent}end if;\n")
-
-      case IRChoice(_, _, branches) =>
-        sb.append(s"${indent}either\n")
-        branches.zipWithIndex.foreach { case (b, i) =>
-          if (i > 0) sb.append(s"${indent}or\n")
-          sb.append(s"$indent${indent}goto L_$b;\n")
-        }
-        sb.append(s"${indent}end either;\n")
-
-      case IRJump(_, _, target) =>
-        sb.append(s"${indent}goto L_$target;\n")
-
-      case IRSkip(_, _, next) =>
-        sb.append(s"${indent}goto L_$next;\n")
-
-      case IREnd(_, _) =>
-        sb.append(s"${indent}goto L_END_ACTOR;\n")
-
-      case _ => assert(false, "ill-formed IR")
-    }
-  }
-
-  // TODO:
-  private def translateParInstr(id: Int, allInstrs: mutable.Map[Int, IRInstruction], pcVar: String, indent: String, sb: StringBuilder): Unit = {
-    val instr = allInstrs(id)
-    def setPc(next: Int): String = s"$pcVar := $next;"
-
-    instr match {
-      case IRQueuePush(_, s, next, q, msg) =>
-        val qName = getChannelName(q)
-        sb.append(s"${indent}queues[\"$qName\"] := Append(queues[\"$qName\"], \"$msg\");\n")
-        sb.append(s"$indent${setPc(next)}\n")
-
-      case IRQueuePop(_, s, next, q, msg) =>
-        val qName = getChannelName(q)
-        sb.append(s"${indent}await Len(queues[\"$qName\"]) > 0;\n")
-        sb.append(s"${indent}cur_msg := Head(queues[\"$qName\"]);\n")
-        sb.append(s"${indent}queues[\"$qName\"] := Tail(queues[\"$qName\"]);\n")
-        sb.append(s"$indent${setPc(next)}\n")
-
-      case IRJump(_, s, target) =>
-        sb.append(s"$indent${setPc(target)}\n")
-
-      case IRParallelEnd(_, s, joinPc) =>
-        sb.append(s"$indent$pcVar := 0;\n")
-
-      case _ =>
-        sb.append(s"${indent}skip;\n")
-    }
-  }
-
-  private def analyzeParallelStructure(instrs: mutable.Map[Int, IRInstruction]): (Map[Int, List[Int]], Set[Int]) = {
-    val parallelOps = mutable.Map[Int, List[Int]]()
-    val containedIds = mutable.Set[Int]()
-
-    instrs.values.collect { case p: IRParallelExec => p }.foreach { p =>
-      parallelOps(p.id) = p.branches
-
-      p.branches.foreach { startId =>
-        val q = mutable.Queue(startId)
-        while (q.nonEmpty) {
-          val curr = q.dequeue()
-          if (!containedIds.contains(curr) && instrs.contains(curr)) {
-            containedIds.add(curr)
-            val i = instrs(curr)
-            i match {
-              case _: IRParallelEnd =>
-              case _ => i.successors.foreach(q.enqueue)
-            }
-          }
-        }
-      }
-    }
-    (parallelOps.toMap, containedIds.toSet)
-  }
-
-  private def getBranchInstructions(parId: Int, branchIdx: Int, instrs: mutable.Map[Int, IRInstruction]): Seq[Int] = {
-    val parInstr = instrs(parId).asInstanceOf[IRParallelExec]
-    val startId = parInstr.branches(branchIdx)
-    val ids = mutable.ListBuffer[Int]()
-
-    val q = mutable.Queue(startId)
-    val visited = mutable.Set[Int]()
-
-    while(q.nonEmpty) {
-      val curr = q.dequeue()
-      if (!visited.contains(curr) && instrs.contains(curr)) {
-        visited.add(curr)
-        ids += curr
-        val i = instrs(curr)
-        i match {
-          case _: IRParallelEnd =>
-          case _ => i.successors.foreach(q.enqueue)
-        }
-      }
-    }
-    ids.toSeq.sorted
   }
 
   private def collectGlobalInfo(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): Set[String] = {
@@ -257,10 +213,4 @@ class PlusCal extends TargetTranslator {
     })
     queues.toSet
   }
-  private def collectGuardVars(instrs: Iterable[IRInstruction]): Set[(String, Int)] = {
-    instrs.collect { case IRJumpGuard(_, _, _, v, _, n) => (v, n) }.toSet
-  }
-
-  private def getMsgName(m: String): String = s"MSG_$m"
-  private def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
 }

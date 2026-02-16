@@ -199,21 +199,4 @@ class Promela extends TargetTranslator {
     })
     (messages.toSet, queues.toSet)
   }
-  // Guard vars for loops
-  private def collectGuardVars(instrs: Iterable[IRInstruction]): Set[(String, Int)] = {
-    instrs.collect {
-      case IRJumpGuard(_, _, _, v, _, i) => (v, i)
-    }.toSet
-  }
-  // Scheduler vars for parallel blocks
-  private def collectSchedVars(instrs: Iterable[IRInstruction]): List[(Int, Int)] = {
-    instrs.collect {
-      case IRParallelExec(schedulerPc, _, b, _) => (schedulerPc, b.size)
-    }.toList
-  }
-
-  private def getMsgName(m: String): String = s"MSG_$m"
-  private def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
-  private def getSchedVarName(parallelBlockNum: Int, branchNum: Int): String =
-    s"sched_block${parallelBlockNum}_branch$branchNum"
 }
