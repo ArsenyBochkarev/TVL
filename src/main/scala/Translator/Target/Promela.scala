@@ -11,6 +11,10 @@ class Promela extends TargetTranslator {
     pcVarName: String
   )
 
+  override def getMsgDeliveredProperty: String = "" // TODO
+  override def getFinishingProperty: String = "" // TODO
+  override def getValidityProperty: String = "" // TODO
+
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
     sb.append("/* Automatically generated file, do not edit! */\n\n")

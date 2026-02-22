@@ -8,6 +8,12 @@ class PlusCal extends TargetTranslator {
   private val and = "/\\"
   private val queueSize = 10 // TODO: we should be able to control it
 
+  private var finishedProperties: List[String] = List.empty[String]
+  override def getFinishingProperty: String = "FinishingProperty == " + finishedProperties.mkString(s"\n$and ")
+  private var msgDeliveredProperties: List[String] = List.empty[String]
+  override def getMsgDeliveredProperty: String = "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
+  override def getValidityProperty: String = "ValidityProperty == (FinishingProperty => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
+
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
 
@@ -38,9 +44,13 @@ class PlusCal extends TargetTranslator {
     val sb = new StringBuilder()
     sb.append(s"process $name = \"$name\"\n")
 
-    // Tmp variable. TODO: check if we really need it
     sb.append("variables\n")
-    sb.append(indent + s"cur_msg = \"\",\n")
+    sb.append(indent + s"${name}_finished = FALSE,\n")
+    // Declare message variables
+    val msgVars = collectMsgVars(instructions.values)
+    msgVars.foreach { msgName =>
+      sb.append(indent + s"cur_msg_$msgName = \"\",\n")
+    }
     // Declare loop guards
     val guardVars = collectGuardVars(instructions.values)
     guardVars.foreach { (v, n) =>
@@ -69,21 +79,33 @@ class PlusCal extends TargetTranslator {
           val qName = getChannelName(q)
           val queue = s"queues[\"$qName\"]"
           if isParallel(instr) then
-            sb.append(s"$queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
+            sb.append(s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
           else
-            sb.append(indent + s"$queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
+            sb.append(indent + s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
 
         case IRQueuePop(_, s, next, q, msg) =>
           val qName = getChannelName(q)
           val queue = s"queues[\"$qName\"]"
           if isParallel(instr) then
             sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
-            sb.append(indent + s"cur_msg := Head($queue); $queue := Tail($queue);\n")
-            sb.append(indent + s"${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1}\n")
+            sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
+            sb.append(indent + s"${getSchedVarName(s._1, s._2)} := $next;")
+
+            // We also need to patch `cur_msg_$msg` to support multiple sends of the same message
+            sb.append(s"L_${id}_patched:\n")
+            sb.append(indent + s"cur_msg_$msg := \"\";\n")
+
+            sb.append(indent + s"goto L_${s._1}\n")
           else
             sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
-            sb.append(indent + s"cur_msg := Head($queue); $queue := Tail($queue);\n")
+            sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
+
+            // We also need to patch `cur_msg_$msg` to support multiple sends of the same message
+            sb.append(s"L_${id}_patched:\n")
+            sb.append(indent + s"cur_msg_$msg := \"\";\n")
+
             sb.append(indent + s"goto L_$next;\n")
+          msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(msg)}\" ~> cur_msg_$msg = Head($queue))"
 
         case IRJump(_, _, target) =>
           sb.append(s"goto L_$target;\n")
@@ -126,8 +148,15 @@ class PlusCal extends TargetTranslator {
               val qName = getChannelName(c.queueName)
               val queue = s"queues[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
-              sb.append(indent * 2 + s"cur_msg := Head(queue); $queue := Tail(queue);\n")
-              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart}; goto L_${s._1};\n")
+              sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
+              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart};\n")
+
+              // We also need to patch `cur_msg_${c.msg}` to support multiple sends of the same message
+              sb.append(s"L_${id}_patched:\n")
+              sb.append(indent * 2 + s"cur_msg_${c.msg} := \"\";\n")
+              msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
+
+              sb.append(indent * 2 + s"goto L_${s._1};\n")
             }
           else
             cases.zipWithIndex.foreach { case (c, i) =>
@@ -135,8 +164,13 @@ class PlusCal extends TargetTranslator {
               val qName = getChannelName(c.queueName)
               val queue = s"queues[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
-              sb.append(indent * 2 + s"cur_msg := Head(queue);\n")
-              sb.append(indent * 2 + s"$queue := Tail(queue);\n")
+              sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
+
+              // We also need to patch `cur_msg_${c.msg}` to support multiple sends of the same message
+              sb.append(s"L_${id}_patched:\n")
+              sb.append(indent * 2 + s"cur_msg_${c.msg} := \"\";\n")
+              msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
+
               sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
             }
           sb.append(indent + "end either;\n")
@@ -198,7 +232,8 @@ class PlusCal extends TargetTranslator {
     }
 
     sb.append(s"L_END_ACTOR_$name:\n")
-    sb.append(s"${indent}skip;\n")
+    sb.append(indent + s"${name}_finished := TRUE;\n")
+    finishedProperties = finishedProperties :+ s"(<>(${name}_finished = TRUE))"
     sb.append("end process;\n\n")
     sb.toString()
   }

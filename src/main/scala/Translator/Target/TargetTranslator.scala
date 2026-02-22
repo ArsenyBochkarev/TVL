@@ -1,12 +1,18 @@
 package Translator.Target
 
-import Translator.IR.{IRInstruction, IRJumpGuard, IRParallelExec}
+import Translator.IR.{IRInstruction, IRJumpGuard, IRParallelExec, IRQueuePush}
 
 import scala.collection.mutable
 
 trait TargetTranslator:
   def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
   def getMsgName(m: String): String = s"MSG_$m"
+  // Messages variables
+  def collectMsgVars(instrs: Iterable[IRInstruction]): Set[String] = {
+    instrs.collect {
+      case IRQueuePush(_, _, _, _, name) => name
+    }.toSet
+  }
   def getSchedVarName(parallelBlockNum: Int, branchNum: Int): String =
     s"sched_block${parallelBlockNum}_branch$branchNum"
   // Guard vars for loops
@@ -22,4 +28,7 @@ trait TargetTranslator:
     }.toList
   }
   def isParallel(inst: IRInstruction): Boolean = inst.scheduler._1 != -1
+  def getMsgDeliveredProperty: String // Part of validity property
+  def getFinishingProperty: String // Both finishing property and progress (no deadlocks)
+  def getValidityProperty: String // If protocol ends, all queues should be empty
   def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String
