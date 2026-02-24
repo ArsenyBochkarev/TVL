@@ -1,2 +1,38 @@
 #!/bin/bash
-sbt "runMain main $1 $2" # TODO: add "-o" flag
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  echo "Usage: ./translate <input_file> <output_file> [target]"
+  echo ""
+  echo "Arguments:"
+  echo "  <input_file>   Path to the source TVL file."
+  echo "  <output_file>  Path where the generated code will be saved."
+  echo "  <target>       Target model checker: 'tla', 'spin'."
+  echo ""
+  echo "Example:"
+  echo "  ./translate src/model.tvl out/model.tla tla"
+  exit 0
+fi
+
+if [ "$#" -lt 3 ]; then
+  echo "Error: Not enough arguments provided."
+  exit 1
+fi
+
+INPUT=$1
+OUTPUT=$2
+TARGET=$3
+
+sbt -error "runMain main $INPUT $OUTPUT $TARGET"
+if [ $? -eq 1 ]; then
+  echo "Translation failed."
+  exit 1
+fi
+
+if [[ "$TARGET" == "tla" ]]; then
+  pcal $OUTPUT
+  tlc $OUTPUT
+elif [[ "$TARGET" == "spin" ]]; then
+  spin -a $OUTPUT
+  gcc -O2 pan.c -o pan.out
+  ./pan.out
+fi

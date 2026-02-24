@@ -56,3 +56,33 @@ hs_err_pid*
 src/main/scala/Grammar/*.java
 src/main/scala/Grammar/*.tokens
 src/main/scala/Grammar/*.interp
+
+### SPIN ###
+*.pml
+pan
+pan.c
+pan.b
+pan.s
+pan.h
+pan.t
+pan.m
+pan.p
+pan.out
+
+### TLA+ ###
+*.tla
+*.tmp
+*.chk
+*.snapshot*
+/*.toolbox/*
+!/*.toolbox/*.launch
+!/*.toolbox/
+/*.toolbox/.*
+*.aux
+*.tex
+*.pdf
+__tlacache__
+.tlacache
+*.cfg
+*.old
+*.bin
