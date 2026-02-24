@@ -11,9 +11,20 @@ class Promela extends TargetTranslator {
     pcVarName: String
   )
 
-  override def getMsgDeliveredProperty: String = "" // TODO
-  override def getFinishingProperty: String = "" // TODO
-  override def getValidityProperty: String = "" // TODO
+  private var finishedProperties: List[String] = List.empty[String]
+  override def getFinishingProperty: String = "ltl FinishingProperty { <>(" + finishedProperties.mkString(s" && ") + ") }"
+  private var msgDeliveredProperties: List[String] = List.empty[String]
+  override def getMsgDeliveredProperty: String = "ltl MessageDeliveredProperty { " + msgDeliveredProperties.mkString(s" && ") + " }"
+  private var channels: List[String] = List.empty[String]
+  override def getValidityProperty: String =
+    val sb = new StringBuilder()
+    sb.append(s"ltl ValidityProperty { [](${finishedProperties.mkString(s" && ")} -> (")
+    channels.foreach { chan =>
+      sb.append(s"len($chan) == 0 && ")
+    }
+    sb.setLength(sb.length - 4)
+    sb.append(")) }")
+    sb.toString()
 
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
@@ -29,9 +40,21 @@ class Promela extends TargetTranslator {
     sb.append("/* Channels */\n")
     queues.foreach { qName =>
       val size = 10 // FIXME: I guess this should be changeable
+      channels = channels :+ getChannelName(qName)
       sb.append(s"chan ${getChannelName(qName)} = [$size] of { mtype };\n")
     }
     sb.append("\n")
+
+    // Declare global variables for 'message delivered' property
+    queues.foreach { qName =>
+      messages.foreach { msg =>
+        sb.append(s"bool send_${getChannelName(qName)}_${getMsgName(msg)} = false; bool recv_${getChannelName(qName)}_${getMsgName(msg)} = false;\n")
+      }
+    }
+    sb.append("\n")
+
+    // Declare finishing variable for current actor
+    actors.keys.toSeq.sorted.foreach { actorName => sb.append(indent + s"bool ${actorName}_finished = false;\n") }
 
     // Actors
     actors.keys.toSeq.sorted.foreach { actorName =>
@@ -78,15 +101,24 @@ class Promela extends TargetTranslator {
       instr match {
         case IRQueuePush(_, s, next, q, msg) =>
           if isParallel(instr) then
-            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next; goto L_${s._1}\n")
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next;\n")
+            sb.append(s"atomic { send_${getChannelName(q)}_${getMsgName(msg)} = true; }; atomic { send_${getChannelName(q)}_${getMsgName(msg)} = false; }\n")
+            sb.append(s"goto L_${s._1}\n")
           else
-            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; goto L_$next\n")
+            sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)};\n")
+            sb.append(s"atomic { send_${getChannelName(q)}_${getMsgName(msg)} = true; }; atomic { send_${getChannelName(q)}_${getMsgName(msg)} = false; }\n")
+            sb.append(s"goto L_$next\n")
 
         case IRQueuePop(_, s, next, q, msg) =>
           if isParallel(instr) then
-            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next; goto L_${s._1}\n")
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next;\n")
+            sb.append(s"atomic { recv_${getChannelName(q)}_${getMsgName(msg)} = true; }; atomic { recv_${getChannelName(q)}_${getMsgName(msg)} = false; }\n")
+            sb.append(s"goto L_${s._1};\n")
           else
-            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; goto L_$next\n")
+            sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)};\n")
+            sb.append(s"atomic { recv_${getChannelName(q)}_${getMsgName(msg)} = true; }; atomic { recv_${getChannelName(q)}_${getMsgName(msg)} = false; }\n")
+            sb.append(s"goto L_$next;\n")
+          msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(q)}_${getMsgName(msg)} == true -> <> recv_${getChannelName(q)}_${getMsgName(msg)} == false)"
 
         case IRJump(_, _, target) =>
           sb.append(s"goto L_$target;\n")
@@ -117,13 +149,20 @@ class Promela extends TargetTranslator {
           if isParallel(instr) then
             sb.append("if\n")
             cases.foreach { c =>
-              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> ${getSchedVarName(s._1, s._2)} = ${c.bodyStart}; goto L_${s._1}\n")
+              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              sb.append(indent * 3 + s"${getSchedVarName(s._1, s._2)} = ${c.bodyStart};\n")
+              sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = false; }\n")
+              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <>recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true)"
+              sb.append(indent * 3 + s"goto L_${s._1};\n")
             }
             sb.append(indent + "fi;\n")
           else
             sb.append("if\n")
             cases.foreach { c =>
-              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} -> goto L_${c.bodyStart};\n")
+              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = false; }\n")
+              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <>recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true)"
+              sb.append(indent * 3 + s"goto L_${c.bodyStart};\n")
             }
             sb.append(indent + "fi;\n")
           // TODO: otherwise
@@ -177,7 +216,8 @@ class Promela extends TargetTranslator {
       }
     }
 
-    sb.append(s"L_END_ACTOR_$name: skip;\n")
+    sb.append(s"L_END_ACTOR_$name: ${name}_finished = true;\n")
+    finishedProperties = finishedProperties :+ s"(${name}_finished == true)"
     sb.append("}\n")
     sb.toString()
   }

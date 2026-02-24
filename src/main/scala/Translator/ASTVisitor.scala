@@ -56,7 +56,7 @@ class ASTVisitor(val debug: Boolean = false) {
     // RECEIVE
     else if (ctx.receive_stmt() != null) {
       val r = ctx.receive_stmt()
-      val qName = getQueueName(r.actor_name().getText, actor)
+      val qName = getQueueName(actor, r.actor_name().getText)
       val receiveInstr = IRQueuePop(currentPc, scheduler, nextPc, qName, r.msg_name().getText)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, receiveInstr)
       nextPc

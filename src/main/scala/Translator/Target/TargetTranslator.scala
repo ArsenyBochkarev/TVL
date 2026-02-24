@@ -4,7 +4,15 @@ import Translator.IR.{IRInstruction, IRJumpGuard, IRParallelExec, IRQueuePush}
 
 import scala.collection.mutable
 
+def targetIsValid(target: String): Boolean =
+  target match {
+    case "tla" => true
+    case "spin" => true
+    case _ => false
+  }
+
 trait TargetTranslator:
+  // TODO: check if we should move it to Promela target
   def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
   def getMsgName(m: String): String = s"MSG_$m"
   // Messages variables

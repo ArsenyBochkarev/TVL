@@ -9,10 +9,11 @@ class PlusCal extends TargetTranslator {
   private val queueSize = 10 // TODO: we should be able to control it
 
   private var finishedProperties: List[String] = List.empty[String]
-  override def getFinishingProperty: String = "FinishingProperty == " + finishedProperties.mkString(s"\n$and ")
+  override def getFinishingProperty: String = s"FinishingProperty == <>(${finishedProperties.mkString(s"\n$and ")})"
   private var msgDeliveredProperties: List[String] = List.empty[String]
   override def getMsgDeliveredProperty: String = "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
-  override def getValidityProperty: String = "ValidityProperty == (FinishingProperty => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
+  override def getValidityProperty: String =
+    s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
 
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
@@ -42,9 +43,10 @@ class PlusCal extends TargetTranslator {
 
   private def translateActor(name: String, instructions: mutable.Map[Int, IRInstruction]): String = {
     val sb = new StringBuilder()
-    sb.append(s"process $name = \"$name\"\n")
+    sb.append(s"fair process $name = \"$name\"\n")
 
     sb.append("variables\n")
+    // Declare finishing variable for current actor
     sb.append(indent + s"${name}_finished = FALSE,\n")
     // Declare message variables
     val msgVars = collectMsgVars(instructions.values)
@@ -63,8 +65,10 @@ class PlusCal extends TargetTranslator {
       for (j <- 1 to numBranches)
         sb.append(indent + s"${getSchedVarName(schedulerPc, j)} = 1,\n")
     }
-    if (sb.endsWith(",\n")) sb.setLength(sb.length - 2)
-    if (guardVars.nonEmpty || schedulerVars.nonEmpty) sb.append("\n")
+    if (sb.endsWith(",\n"))
+      sb.setLength(sb.length - 2)
+    if (msgVars.nonEmpty || guardVars.nonEmpty || schedulerVars.nonEmpty)
+      sb.append("\n")
 
     sb.append(";\n")
     sb.append("begin\n")
@@ -218,7 +222,7 @@ class PlusCal extends TargetTranslator {
           sb.append(indent + "or\n")
           sb.append(indent * 2 + "await ")
           for (bn <- 1 until branchNumber)
-            sb.append(s"${getSchedVarName(schedulerPc, branchNumber)} = 0 $and ")
+            sb.append(s"${getSchedVarName(schedulerPc, bn)} = 0 $and ")
           sb.append("TRUE;\n") // TODO: we can actually dispose of this
           sb.append(indent * 2 + s"goto L_$breakExit;\n")
           sb.append(indent + "end either;\n")
@@ -233,7 +237,7 @@ class PlusCal extends TargetTranslator {
 
     sb.append(s"L_END_ACTOR_$name:\n")
     sb.append(indent + s"${name}_finished := TRUE;\n")
-    finishedProperties = finishedProperties :+ s"(<>(${name}_finished = TRUE))"
+    finishedProperties = finishedProperties :+ s"(${name}_finished = TRUE)"
     sb.append("end process;\n\n")
     sb.toString()
   }
