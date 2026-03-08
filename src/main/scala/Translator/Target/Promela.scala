@@ -102,6 +102,11 @@ class Promela extends TargetTranslator {
     // Traverse all instructions, translating them (almost) independently
     val sortedIds = instructions.keys.toSeq.sorted
     sortedIds.foreach { id =>
+      // User-defined labels first
+      val actorLabels = userLabels.getOrElse(name, Map.empty)
+      val labelsForId = actorLabels.filter(_._2 == id).keys
+      labelsForId.foreach { l => sb.append(s"$l:\n") }
+
       sb.append(s"L_$id: ")
       val instr = instructions(id)
       instr match {
@@ -249,4 +254,16 @@ class Promela extends TargetTranslator {
     })
     (messages.toSet, queues.toSet)
   }
+
+  override def logicIsSupported(logic: String): Boolean =
+    logic match
+      case "ltl" => true
+      case "ctl" => false
+  override def formatLTL(name: String, formula: String): String =
+    val spinFormula = formula.replaceAll("([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)", "$1@$2")
+    s"ltl $name { $spinFormula }"
+  override def formatCTL(name: String, formula: String): String =
+    println("Error: CTL is not supported for PlusCal target")
+    System.exit(1)
+    ""
 }

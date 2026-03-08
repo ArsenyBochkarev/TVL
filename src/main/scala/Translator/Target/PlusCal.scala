@@ -81,6 +81,7 @@ class PlusCal extends TargetTranslator {
     // Traverse all instructions, translating them (almost) independently
     val sortedIds = instructions.keys.toSeq.sorted
     sortedIds.foreach { id =>
+      // We don't insert user-defined labels for this target
       sb.append(s"L_$id:\n")
       val instr = instructions(id)
       instr match {
@@ -257,4 +258,38 @@ class PlusCal extends TargetTranslator {
     })
     queues.toSet
   }
+
+  override def logicIsSupported(logic: String): Boolean =
+    logic match
+      case "ltl" => true
+      case "ctl" => false
+  override def formatLTL(name: String, formula: String): String =
+    // Patterns <actor name>.<label>
+    val pattern = "([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)".r
+
+    // pc[<actor name>] = <label for corresponding instruction ID>
+    // Inserting user-defined label breaks (a little) atomic semantics for labels
+    var tlaFormula = pattern.replaceAllIn(formula, m => {
+      val actor = m.group(1)
+      val label = m.group(2)
+      val id = userLabels.get(actor).flatMap(_.get(label))
+
+      if (id.isDefined) {
+        s"""(pc["$actor"] = "L_${id.get}")"""
+      } else {
+        println(s"[WARNING] Label $actor.$label not found! Property might fail to compile.")
+        s"""(pc["$actor"] = "$label")"""
+      }
+    })
+    tlaFormula = tlaFormula
+      .replace("->", "=>")
+      .replace("&&", "/\\")
+      .replace("||", "\\/")
+      .replace("!", "~")
+
+    s"$name == $tlaFormula"
+  override def formatCTL(name: String, formula: String): String =
+    println("Error: CTL is not supported for PlusCal target")
+    System.exit(1)
+    ""
 }

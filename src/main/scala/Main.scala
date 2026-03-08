@@ -23,14 +23,19 @@ def parse(input: String, output: String, target: String, debug: Boolean, enabled
     case "spin" => new Promela()
     case "tla" => new PlusCal()
   }
+
   translator.setEnabledProperties(enabledProps)
+  translator.setUserLabels(visitor.getLabels)
+
   val code = translator.translate(ir)
+  val customSpecs = translator.generateUserSpecs(visitor.getUserSpecs, target)
   val writer = new PrintWriter(new File(output))
   try {
     writer.println(code)
     writer.println(translator.getFinishingProperty)
     writer.println(translator.getMsgDeliveredProperty)
     writer.println(translator.getValidityProperty)
+    writer.println(customSpecs)
   } finally {
     writer.close()
   }

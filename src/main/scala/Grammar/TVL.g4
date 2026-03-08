@@ -1,7 +1,11 @@
 grammar TVL;
 
+@header {
+    package Grammar;
+}
+
 program: module_def EOF;
-module_def: MODULE module_name (import_def)* (actor_def)*;
+module_def: MODULE module_name (import_def)* (actor_def)* (spec_def)*;
 module_name: IDENTIFIER;
 
 // 'import <module>'
@@ -16,8 +20,16 @@ actor_def: ACTOR actor_name (INTERACTS WITH actor_list)? block;
 actor_name: IDENTIFIER;
 actor_list: IDENTIFIER (',' IDENTIFIER)*;
 
-block: '{' (statement)* '}';
+spec_def: SPECS '{' (formula_def)* '}';
+// E.g. `ltl MyProp: "[] (A -> <> B)";`
+formula_def: logic_type formula_name ':' STRING ';';
+logic_type: LTL | CTL;
+formula_name: IDENTIFIER;
 
+block: '{' (labeled_statement)* '}';
+
+labeled_statement: label_def? statement;
+label_def: IDENTIFIER ':';
 statement:
       send_stmt
     | receive_stmt
@@ -26,6 +38,7 @@ statement:
     | repeat_stmt
     | parallel_stmt
     | break_stmt
+    | skip_stmt
     ;
 
 // send <msg name> to <actor name>
@@ -46,6 +59,7 @@ choose_stmt: CHOOSE block (OR block)+;
 // repeat <number> { ... }
 repeat_stmt: REPEAT (NUMBER)? block;
 break_stmt: BREAK;
+skip_stmt: SKIP_RULE;
 
 // Parallel
 parallel_stmt: PARALLEL block (AND block)+;
@@ -68,6 +82,11 @@ REPEAT: 'repeat';
 BREAK: 'break';
 PARALLEL: 'parallel';
 AND: 'and';
+SKIP_RULE: 'skip';
+
+SPECS: 'specs';
+LTL: 'ltl';
+CTL: 'ctl';
 
 LBRACE: '{';
 RBRACE: '}';
@@ -79,6 +98,7 @@ ARROW: '=>';
 
 IDENTIFIER: [a-zA-Z_] [a-zA-Z0-9_]*;
 NUMBER: [0-9]+;
+STRING: '"' (~["\\] | '\\' .)* '"';
 WS: [ \t\r\n]+ -> skip;
 COMMENT: '//' .*? '\n' -> skip;
 BLOCK_COMMENT: '/*' .*? '*/' -> skip;

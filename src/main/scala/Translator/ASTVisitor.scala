@@ -7,7 +7,15 @@ import Translator.IR.Lib.QueueCondition
 import scala.jdk.CollectionConverters.*
 import scala.collection.mutable
 
+case class UserSpec(logic: String, name: String, formula: String)
+
 class ASTVisitor(val debug: Boolean = false) {
+  // actor name -> (label name -> instruction id)
+  private val labels = mutable.Map[/*actor name=*/String, mutable.Map[/*label name*/String, /*instruction id*/Int]]()
+  def getLabels: Map[String, Map[String, Int]] = labels.map(kv => kv._1 -> kv._2.toMap).toMap
+  private val userSpecs = mutable.ListBuffer[UserSpec]()
+  def getUserSpecs: List[UserSpec] = userSpecs.toList
+
   private var pcCounter = 0
   private var scheduler: (Int, Int) = (-1, -1) // We'll need it for `parallel` blocks
   private def nextId(): Int = { pcCounter += 1; pcCounter }
@@ -20,6 +28,7 @@ class ASTVisitor(val debug: Boolean = false) {
   private def getGuardVarName(id: Int, actorName: String): String = s"guard_${actorName}_$id"
 
   def visitProgram(ctx: ProgramContext): Unit = {
+    // Actors
     ctx.module_def().actor_def().asScala.foreach { actorCtx =>
       val name = actorCtx.actor_name().getText
       actorProcedures(name) = mutable.Map[Int, IRInstruction]()
@@ -28,20 +37,38 @@ class ASTVisitor(val debug: Boolean = false) {
       val endId = translateBlock(actorCtx.block(), name, startId)
       actorProcedures(name)(endId) = IREnd(endId, scheduler)
     }
+
+    // User specs
+    ctx.module_def().spec_def().asScala.foreach { specCtx =>
+      specCtx.formula_def().asScala.foreach { fCtx =>
+        val logic = fCtx.logic_type().getText.toLowerCase
+        val name = fCtx.formula_name().getText
+        val rawFormulaStr = fCtx.STRING().getText
+        val formula = rawFormulaStr.substring(1, rawFormulaStr.length - 1)
+        userSpecs.append(UserSpec(logic, name, formula))
+      }
+    }
+
     if (debug) dumpIR()
   }
 
   private def translateBlock(ctx: BlockContext, actor: String, startId: Int): Int = {
     var currentPc = startId
-    val statements = ctx.statement().asScala
+    val labeled_statements = ctx.labeled_statement().asScala
 
-    statements.foreach { stmt =>
+    labeled_statements.foreach { stmt =>
       currentPc = translateStatement(stmt, actor, currentPc)
     }
     currentPc
   }
 
-  private def translateStatement(ctx: StatementContext, actor: String, currentPc: Int): Int = {
+  private def translateStatement(labeledCtx: Labeled_statementContext, actor: String, currentPc: Int): Int = {
+    if (labeledCtx.label_def() != null) {
+      val labelName = labeledCtx.label_def().IDENTIFIER().getText
+      labels.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(labelName, currentPc)
+    }
+
+    val ctx = labeledCtx.statement()
     val nextPc = nextId()
 
     // SEND
@@ -133,6 +160,13 @@ class ASTVisitor(val debug: Boolean = false) {
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, jumpInstr)
       }
       nextId()
+    }
+
+    // НОВОЕ: SKIP
+    else if (ctx.skip_stmt() != null) {
+      val skipInstr = IRSkip(currentPc, scheduler, nextPc)
+      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, skipInstr)
+      nextPc
     }
 
     // PARALLEL
