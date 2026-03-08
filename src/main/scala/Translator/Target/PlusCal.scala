@@ -9,11 +9,16 @@ class PlusCal extends TargetTranslator {
   private val queueSize = 10 // TODO: we should be able to control it
 
   private var finishedProperties: List[String] = List.empty[String]
-  override def getFinishingProperty: String = s"FinishingProperty == <>(${finishedProperties.mkString(s"\n$and ")})"
+  override def getFinishingProperty: String =
+    if (!isPropEnabled("finishing") || finishedProperties.isEmpty) ""
+    else s"FinishingProperty == <>(${finishedProperties.mkString(s"\n$and ")})"
   private var msgDeliveredProperties: List[String] = List.empty[String]
-  override def getMsgDeliveredProperty: String = "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
+  override def getMsgDeliveredProperty: String =
+    if (!isPropEnabled("msg") || msgDeliveredProperties.isEmpty) ""
+    else "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
   override def getValidityProperty: String =
-    s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
+    if (!isPropEnabled("validity") || finishedProperties.isEmpty) ""
+    else s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
 
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()

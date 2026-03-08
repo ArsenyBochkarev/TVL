@@ -5,9 +5,9 @@ import Translator.Target.{TargetTranslator, *}
 
 import java.io.{File, PrintWriter}
 
-def parse(input: String, output: String, target: String, debug: Boolean = false): Unit = {
+def parse(input: String, output: String, target: String, debug: Boolean, enabledProps: String): Unit = {
   if !targetIsValid(target) then
-    println(s"Error: Invalid target \"$target\". Use \"pluscal\" or \"promela\"")
+    println(s"Error: Invalid target \"$target\". Use \"tla\" or \"spin\"")
     System.exit(1)
 
   val charstream = CharStreams.fromFileName(input)
@@ -23,6 +23,7 @@ def parse(input: String, output: String, target: String, debug: Boolean = false)
     case "spin" => new Promela()
     case "tla" => new PlusCal()
   }
+  translator.setEnabledProperties(enabledProps)
   val code = translator.translate(ir)
   val writer = new PrintWriter(new File(output))
   try {
@@ -36,7 +37,7 @@ def parse(input: String, output: String, target: String, debug: Boolean = false)
 }
 
 @main
-def main(filePath: String, outputFile: String, target: String): Unit = {
-  parse(filePath, outputFile, target)
+def main(filePath: String, outputFile: String, target: String, enabledProps: String): Unit = {
+  parse(filePath, outputFile, target, /*debug=*/false, enabledProps)
   System.exit(0)
 }

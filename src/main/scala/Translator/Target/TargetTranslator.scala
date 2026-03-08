@@ -12,6 +12,19 @@ def targetIsValid(target: String): Boolean =
   }
 
 trait TargetTranslator:
+  private val allProperties: Set[String] = Set("all", "finishing", "msg", "validity")
+  var enabledProperties: Set[String] = Set("all")
+  def setEnabledProperties(props: String): Unit = {
+    enabledProperties = props.split(",").map(_.trim.toLowerCase).toSet
+    for (x <- enabledProperties)
+      if (!allProperties.contains(x))
+        println(s"Error: erroneous name for generating property. Possible values: " + allProperties.toString())
+        System.exit(1)
+  }
+  def isPropEnabled(prop: String): Boolean = {
+    enabledProperties.contains("all") || enabledProperties.contains(prop)
+  }
+
   // TODO: check if we should move it to Promela target
   def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
   def getMsgName(m: String): String = s"MSG_$m"
