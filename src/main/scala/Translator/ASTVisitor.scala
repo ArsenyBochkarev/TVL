@@ -75,8 +75,20 @@ class ASTVisitor(val debug: Boolean = false) {
     if (ctx.send_stmt() != null) {
       val s = ctx.send_stmt()
       val qName = getQueueName(s.actor_name().getText, actor)
-      val sendInstr = IRQueuePush(currentPc, scheduler, nextPc, qName, s.msg_name().getText)
-      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, sendInstr)
+      val msgName = s.msg_name().getText
+      val sendInstr = IRQueuePush(currentPc, scheduler, nextPc, qName, msgName)
+
+      var iterPc = currentPc
+      val count = if (s.NUMBER() != null) s.NUMBER().getText.toInt else 1
+      for (_ <- 1 until count) {
+        val nextInChain = nextId()
+        val sendInstr = IRQueuePush(iterPc, scheduler, nextInChain, qName, msgName)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, sendInstr)
+        iterPc = nextInChain
+      }
+
+      val finalSendInstr = IRQueuePush(iterPc, scheduler, nextPc, qName, msgName)
+      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalSendInstr)
       nextPc
     }
 
@@ -84,8 +96,19 @@ class ASTVisitor(val debug: Boolean = false) {
     else if (ctx.receive_stmt() != null) {
       val r = ctx.receive_stmt()
       val qName = getQueueName(actor, r.actor_name().getText)
-      val receiveInstr = IRQueuePop(currentPc, scheduler, nextPc, qName, r.msg_name().getText)
-      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, receiveInstr)
+      val msgName = r.msg_name().getText
+
+      var iterPc = currentPc
+      val count = if (r.NUMBER() != null) r.NUMBER().getText.toInt else 1
+      for (_ <- 1 until count) {
+        val nextInChain = nextId()
+        val receiveInstr = IRQueuePop(iterPc, scheduler, nextInChain, qName, msgName)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, receiveInstr)
+        iterPc = nextInChain
+      }
+
+      val finalReceiveInstr = IRQueuePop(iterPc, scheduler, nextPc, qName, msgName)
+      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalReceiveInstr)
       nextPc
     }
 

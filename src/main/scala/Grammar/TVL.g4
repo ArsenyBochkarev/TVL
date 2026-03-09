@@ -42,11 +42,11 @@ statement:
     ;
 
 // send <msg name> to <actor name>
-send_stmt: SEND msg_name TO actor_name;
+send_stmt: SEND (NUMBER)? msg_name TO actor_name;
 msg_name: IDENTIFIER;
 
 // receive <msg name> from <actor name>
-receive_stmt: RECEIVE msg_name FROM actor_name;
+receive_stmt: RECEIVE (NUMBER)? msg_name FROM actor_name;
 // receive alts { <msg name> from <actor name> => { ... }... }
 receive_alts_stmt: RECEIVE ALTS '{' (receive_case)+ (otherwise_case)? '}';
 receive_case: msg_name FROM actor_name '=>' block;
@@ -87,14 +87,6 @@ SKIP_RULE: 'skip';
 SPECS: 'specs';
 LTL: 'ltl';
 CTL: 'ctl';
-
-LBRACE: '{';
-RBRACE: '}';
-LBRACK: '[';
-RBRACK: ']';
-COMMA: ',';
-DOT: '.';
-ARROW: '=>';
 
 IDENTIFIER: [a-zA-Z_] [a-zA-Z0-9_]*;
 NUMBER: [0-9]+;
