@@ -100,20 +100,10 @@ class PlusCal extends TargetTranslator {
             sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
             sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
             sb.append(indent + s"${getSchedVarName(s._1, s._2)} := $next;")
-
-            // We also need to patch `cur_msg_$msg` to support multiple sends of the same message
-            sb.append(s"L_${id}_patched:\n")
-            sb.append(indent + s"cur_msg_$msg := \"\";\n")
-
             sb.append(indent + s"goto L_${s._1}\n")
           else
             sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
             sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
-
-            // We also need to patch `cur_msg_$msg` to support multiple sends of the same message
-            sb.append(s"L_${id}_patched:\n")
-            sb.append(indent + s"cur_msg_$msg := \"\";\n")
-
             sb.append(indent + s"goto L_$next;\n")
           msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(msg)}\" ~> cur_msg_$msg = Head($queue))"
 
@@ -160,12 +150,7 @@ class PlusCal extends TargetTranslator {
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
               sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart};\n")
-
-              // We also need to patch `cur_msg_${c.msg}` to support multiple sends of the same message
-              sb.append(s"L_${id}_patched:\n")
-              sb.append(indent * 2 + s"cur_msg_${c.msg} := \"\";\n")
               msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
-
               sb.append(indent * 2 + s"goto L_${s._1};\n")
             }
           else
@@ -175,12 +160,7 @@ class PlusCal extends TargetTranslator {
               val queue = s"queues[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
-
-              // We also need to patch `cur_msg_${c.msg}` to support multiple sends of the same message
-              sb.append(s"L_${id}_patched:\n")
-              sb.append(indent * 2 + s"cur_msg_${c.msg} := \"\";\n")
               msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
-
               sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
             }
           sb.append(indent + "end either;\n")
