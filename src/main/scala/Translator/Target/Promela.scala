@@ -163,7 +163,7 @@ class Promela extends TargetTranslator {
               sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
               sb.append(indent * 3 + s"${getSchedVarName(s._1, s._2)} = ${c.bodyStart};\n")
               sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; \n")
-              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true))"
+              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} == true))"
               sb.append(indent * 3 + s"goto L_${s._1};\n")
             }
             sb.append(indent + "fi;\n")
@@ -172,7 +172,7 @@ class Promela extends TargetTranslator {
             cases.foreach { c =>
               sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
               sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; \n")
-              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true))"
+              msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} == true))"
               sb.append(indent * 3 + s"goto L_${c.bodyStart};\n")
             }
             sb.append(indent + "fi;\n")

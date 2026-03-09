@@ -1,0 +1,24 @@
+module Test
+
+actor R1 {
+    send Y to R3
+    send X to R2
+}
+
+actor R2 {
+    R2Receive: receive X from R1
+    send X to R3
+}
+
+actor R3 {
+    repeat {
+        receive alts {
+            X from R2 => { R3Break: break }
+            Y from R1 => { skip }
+        }
+    }
+}
+
+specs {
+    ltl R2EndsR3: "[] (R2.R2Receive -> <> (R3.R3Break))";
+}
