@@ -12,6 +12,8 @@ case class UserSpec(logic: String, name: String, formula: String)
 class ASTVisitor(val debug: Boolean = false) {
   // actor name -> (label name -> instruction id)
   private val labels = mutable.Map[/*actor name=*/String, mutable.Map[/*label name*/String, /*instruction id*/Int]]()
+  // actor name -> (msg name -> instruction id)
+  private val receiveMap = mutable.Map[/*actor name=*/String, mutable.Map[/*label name*/String, /*instruction id*/Int]]()
   def getLabels: Map[String, Map[String, Int]] = labels.map(kv => kv._1 -> kv._2.toMap).toMap
   private val userSpecs = mutable.ListBuffer[UserSpec]()
   def getUserSpecs: List[UserSpec] = userSpecs.toList
@@ -46,6 +48,35 @@ class ASTVisitor(val debug: Boolean = false) {
         val rawFormulaStr = fCtx.STRING().getText
         val formula = rawFormulaStr.substring(1, rawFormulaStr.length - 1)
         userSpecs.append(UserSpec(logic, name, formula))
+      }
+    }
+
+    // There can also be some reserved names for labels
+    // They'll be transformed into user-defined ones
+    labels.foreach { (actor, actorLabels) =>
+      val labelNames = actorLabels.keys.toList
+
+      // Recovery property: [] (fail_i -> <> start_i)
+      val failLabels = labelNames.filter(_.toLowerCase.startsWith("fail"))
+      val startLabels = labelNames.filter(_.toLowerCase.startsWith("start"))
+
+      if (failLabels.nonEmpty && startLabels.nonEmpty) {
+        failLabels.foreach { fail =>
+          startLabels.foreach { start =>
+            val formula = s"[] ($actor.$fail -> <> $actor.$start)"
+            userSpecs.append(UserSpec("ltl", s"RecoveryProperty_${actor}_$fail", formula))
+          }
+        }
+      }
+
+      // Loss Detection: [] (expired_msg => msg_was_received)
+      val expiredLabels = labelNames.filter(_.toLowerCase.startsWith("expired_msg_"))
+      expiredLabels.foreach { expLabel =>
+        val msgName = expLabel.stripPrefix("expired_msg_")
+        val labelPC = receiveMap.get(actor).get(msgName)
+        labels.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName + "_received", labelPC)
+        val formula = s"[] ($actor.$expLabel => $actor.$msgName)"
+        userSpecs.append(UserSpec("ltl", s"LossDetection_${actor}_$expLabel", formula))
       }
     }
 
@@ -97,6 +128,7 @@ class ASTVisitor(val debug: Boolean = false) {
       val r = ctx.receive_stmt()
       val qName = getQueueName(actor, r.actor_name().getText)
       val msgName = r.msg_name().getText
+      receiveMap.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName, currentPc)
 
       var iterPc = currentPc
       val count = if (r.NUMBER() != null) r.NUMBER().getText.toInt else 1
@@ -123,7 +155,9 @@ class ASTVisitor(val debug: Boolean = false) {
         val bodyEnd = translateBlock(c.block(), actor, bodyStart)
         val jumpInstr = IRJump(bodyEnd, scheduler, exitPc)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpInstr)
-        QueueCondition(qName, c.msg_name().getText, bodyStart)
+        val msgName = c.msg_name().getText
+        receiveMap.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName, bodyStart)
+        QueueCondition(qName, msgName, bodyStart)
       }.toList
 
       // TODO: add otherwise case to grammar and handle it here
