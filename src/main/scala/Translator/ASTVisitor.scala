@@ -37,7 +37,7 @@ class ASTVisitor(val debug: Boolean = false) {
 
       val startId = nextId()
       val endId = translateBlock(actorCtx.block(), name, startId)
-      actorProcedures(name)(endId) = IREnd(endId, scheduler)
+      actorProcedures(name)(endId) = IREnd(endId, actorCtx.getStop.getLine, scheduler)
     }
 
     // User specs
@@ -107,18 +107,18 @@ class ASTVisitor(val debug: Boolean = false) {
       val s = ctx.send_stmt()
       val qName = getQueueName(s.actor_name().getText, actor)
       val msgName = s.msg_name().getText
-      val sendInstr = IRQueuePush(currentPc, scheduler, nextPc, qName, msgName)
+      val sendInstr = IRQueuePush(currentPc, s.getStart.getLine, scheduler, nextPc, qName, msgName)
 
       var iterPc = currentPc
       val count = if (s.NUMBER() != null) s.NUMBER().getText.toInt else 1
       for (_ <- 1 until count) {
         val nextInChain = nextId()
-        val sendInstr = IRQueuePush(iterPc, scheduler, nextInChain, qName, msgName)
+        val sendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextInChain, qName, msgName)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, sendInstr)
         iterPc = nextInChain
       }
 
-      val finalSendInstr = IRQueuePush(iterPc, scheduler, nextPc, qName, msgName)
+      val finalSendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextPc, qName, msgName)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalSendInstr)
       nextPc
     }
@@ -134,12 +134,12 @@ class ASTVisitor(val debug: Boolean = false) {
       val count = if (r.NUMBER() != null) r.NUMBER().getText.toInt else 1
       for (_ <- 1 until count) {
         val nextInChain = nextId()
-        val receiveInstr = IRQueuePop(iterPc, scheduler, nextInChain, qName, msgName)
+        val receiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextInChain, qName, msgName)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, receiveInstr)
         iterPc = nextInChain
       }
 
-      val finalReceiveInstr = IRQueuePop(iterPc, scheduler, nextPc, qName, msgName)
+      val finalReceiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextPc, qName, msgName)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalReceiveInstr)
       nextPc
     }
@@ -153,7 +153,7 @@ class ASTVisitor(val debug: Boolean = false) {
         val qName = getQueueName(actor, c.actor_name().getText)
         val bodyStart = nextId()
         val bodyEnd = translateBlock(c.block(), actor, bodyStart)
-        val jumpInstr = IRJump(bodyEnd, scheduler, exitPc)
+        val jumpInstr = IRJump(bodyEnd, rAlts.getStart.getLine, scheduler, exitPc)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpInstr)
         val msgName = c.msg_name().getText
         receiveMap.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName, bodyStart)
@@ -162,23 +162,24 @@ class ASTVisitor(val debug: Boolean = false) {
 
       // TODO: add otherwise case to grammar and handle it here
 
-      val branchInstr = IRBranch(currentPc, scheduler, cases, None)
+      val branchInstr = IRBranch(currentPc, rAlts.getStart.getLine, scheduler, cases, None)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, branchInstr)
       exitPc
     }
 
     // CHOOSE
     else if (ctx.choose_stmt() != null) {
-      val branches = ctx.choose_stmt().block().asScala
+      val chooseStmt = ctx.choose_stmt()
+      val branches = chooseStmt.block().asScala
       val branchStarts = branches.map(_ => nextId()).toList
       val afterChoice = nextId()
 
-      val choiceInstr = IRChoice(currentPc, scheduler, branchStarts)
+      val choiceInstr = IRChoice(currentPc, chooseStmt.getStart.getLine, scheduler, branchStarts)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, choiceInstr)
 
       branches.zip(branchStarts).foreach { (branch, start) =>
         val end = translateBlock(branch, actor, start)
-        val jumpInstr = IRJump(end, scheduler, afterChoice)
+        val jumpInstr = IRJump(end, chooseStmt.getStart.getLine, scheduler, afterChoice)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(end, jumpInstr)
       }
       afterChoice
@@ -197,12 +198,12 @@ class ASTVisitor(val debug: Boolean = false) {
         val bodyEnd = translateBlock(r.block(), actor, loopStart)
         val guardVar = getGuardVarName(bodyEnd, actor)
         val iterations = r.NUMBER().getText.toInt // TODO: throw proper error here if no Int was detected
-        val jumpGuardInstr = IRJumpGuard(bodyEnd, scheduler, afterLoop, guardVar, loopStart, iterations)
+        val jumpGuardInstr = IRJumpGuard(bodyEnd, r.getStart.getLine, scheduler, afterLoop, guardVar, loopStart, iterations)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpGuardInstr)
       } else {
         // Uncountable loop
         val bodyEnd = translateBlock(r.block(), actor, loopStart)
-        val jumpInstr = IRJump(bodyEnd, scheduler, loopStart)
+        val jumpInstr = IRJump(bodyEnd, r.getStart.getLine, scheduler, loopStart)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpInstr)
       }
 
@@ -213,15 +214,15 @@ class ASTVisitor(val debug: Boolean = false) {
     // BREAK
     else if (ctx.break_stmt() != null) {
       if (breakStack.nonEmpty) {
-        val jumpInstr = IRJump(currentPc, scheduler, breakStack.top)
+        val jumpInstr = IRJump(currentPc, ctx.break_stmt().getStart.getLine, scheduler, breakStack.top)
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, jumpInstr)
       }
       nextId()
     }
 
-    // НОВОЕ: SKIP
+    // SKIP
     else if (ctx.skip_stmt() != null) {
-      val skipInstr = IRSkip(currentPc, scheduler, nextPc)
+      val skipInstr = IRSkip(currentPc, ctx.skip_stmt().getStart.getLine, scheduler, nextPc)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, skipInstr)
       nextPc
     }
@@ -233,14 +234,14 @@ class ASTVisitor(val debug: Boolean = false) {
       val joinPc = nextId()
 
       scheduler = (-1, 0)
-      val parallelExecInstr = IRParallelExec(currentPc, scheduler, branchStarts, joinPc)
+      val parallelExecInstr = IRParallelExec(currentPc, ctx.parallel_stmt().getStart.getLine, scheduler, branchStarts, joinPc)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, parallelExecInstr)
 
       var branchNum: Int = 1
       branches.zip(branchStarts).foreach { (b, start) =>
         scheduler = (currentPc, branchNum)
         val end = translateBlock(b, actor, start)
-        val parallelEndInstr = IRParallelEnd(end, scheduler, joinPc) // Wait here for all parallel branches to end
+        val parallelEndInstr = IRParallelEnd(end, ctx.parallel_stmt().getStart.getLine, scheduler, joinPc) // Wait here for all parallel branches to end
         actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(end, parallelEndInstr)
         branchNum += 1
       }
@@ -288,15 +289,15 @@ class ASTVisitor(val debug: Boolean = false) {
       val casesStr = b.cases.map(c => s"JUMP TO [${c.bodyStart}] IF (${c.msg} from ${c.queueName})").mkString(", ")
       val otherStr = b.otherwise.map(o => s", otherwise -> [$o]").getOrElse("")
       s"BRANCH: { $casesStr$otherStr }"
-    case IRParallelExec(_, _, branches, breakExit) => s"PARALLEL START: branches -> [${branches.mkString(", ")}], break -> [$breakExit]"
-    case IRParallelEnd(_, _, j) => s"PARALLEL_END"
-    case IRQueuePush(_, _, next, q, m) => s"PUSH $m to $q"
-    case IRQueuePop(_, _, next, q, m) => s"POP $m from $q"
-    case IRChoice(_, _, _) => "CHOICE"
-    case IRJump(_, _, _) => s"JUMP"
-    case IRJumpGuard(_, _, n, v, t, _) => s"JUMP TO [$t] IF $v > 0, ELSE to [$n]"
-    case IREnd(_, _) => ""
-    case IRSkip(_, _, _) => "SKIP" // TODO: add 'skip' to grammar
+    case IRParallelExec(_, _, _, branches, breakExit) => s"PARALLEL START: branches -> [${branches.mkString(", ")}], break -> [$breakExit]"
+    case IRParallelEnd(_, _, _, j) => s"PARALLEL_END"
+    case IRQueuePush(_, _, _, next, q, m) => s"PUSH $m to $q"
+    case IRQueuePop(_, _, _, next, q, m) => s"POP $m from $q"
+    case IRChoice(_, _, _, _) => "CHOICE"
+    case IRJump(_, _, _, _) => s"JUMP"
+    case IRJumpGuard(_, _, _, n, v, t, _) => s"JUMP TO [$t] IF $v > 0, ELSE to [$n]"
+    case IREnd(_, _, _) => ""
+    case IRSkip(_, _, _, _) => "SKIP"
     case _ =>
       val succ = if (i.successors.nonEmpty) s" -> [${i.successors.mkString(", ")}]" else ""
       s"${i.getClass.getSimpleName.replace("IR", "")}$succ"

@@ -107,10 +107,12 @@ class Promela extends TargetTranslator {
       val labelsForId = actorLabels.filter(_._2 == id).keys
       labelsForId.foreach { l => sb.append(s"$l:\n") }
 
-      sb.append(s"L_$id: ")
+      val labelName = s"L_$id"
+      sb.append(s"$labelName: ")
       val instr = instructions(id)
+      getMapper.add(labelName, instr.lineNumber)
       instr match {
-        case IRQueuePush(_, s, next, q, msg) =>
+        case IRQueuePush(_, _, s, next, q, msg) =>
           if isParallel(instr) then
             sb.append(s"${getChannelName(q)} ! ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next;\n")
             sb.append(s"atomic { send_${getChannelName(q)}_${getMsgName(msg)} = true; }; \n")
@@ -120,7 +122,7 @@ class Promela extends TargetTranslator {
             sb.append(s"atomic { send_${getChannelName(q)}_${getMsgName(msg)} = true; }; \n")
             sb.append(s"goto L_$next\n")
 
-        case IRQueuePop(_, s, next, q, msg) =>
+        case IRQueuePop(_, _, s, next, q, msg) =>
           if isParallel(instr) then
             sb.append(s"${getChannelName(q)} ? ${getMsgName(msg)}; ${getSchedVarName(s._1, s._2)} = $next;\n")
             sb.append(s"atomic { recv_${getChannelName(q)}_${getMsgName(msg)} = true; }; \n")
@@ -131,10 +133,10 @@ class Promela extends TargetTranslator {
             sb.append(s"goto L_$next;\n")
           msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(q)}_${getMsgName(msg)} == true -> <> (recv_${getChannelName(q)}_${getMsgName(msg)} == true))"
 
-        case IRJump(_, _, target) =>
+        case IRJump(_, _, _, target) =>
           sb.append(s"goto L_$target;\n")
 
-        case IRJumpGuard(_, s, next, guardVar, target, _) =>
+        case IRJumpGuard(_, _, s, next, guardVar, target, _) =>
           if isParallel(instr) then
             sb.append(indent + s"if\n")
             sb.append(indent * 2 + s":: $guardVar > 0 -> $guardVar = $guardVar - 1; ${getSchedVarName(s._1, s._2)} = $target; goto L_${s._1}\n")
@@ -146,7 +148,7 @@ class Promela extends TargetTranslator {
             sb.append(indent * 2 + s":: else -> goto L_$next;\n")
             sb.append(indent + s"fi;\n")
 
-        case IRChoice(_, s, branches) =>
+        case IRChoice(_, _, s, branches) =>
           sb.append("if\n")
           branches.foreach { b =>
             if isParallel(instr) then
@@ -156,7 +158,7 @@ class Promela extends TargetTranslator {
           }
           sb.append(indent + "fi;\n")
 
-        case IRBranch(_, s, cases, otherwise) =>
+        case IRBranch(_, _, s, cases, otherwise) =>
           if isParallel(instr) then
             sb.append("if\n")
             cases.foreach { c =>
@@ -178,10 +180,10 @@ class Promela extends TargetTranslator {
             sb.append(indent + "fi;\n")
           // TODO: otherwise
 
-        case IRSkip(_, _, next) =>
+        case IRSkip(_, _, _, next) =>
           sb.append(s"skip; goto L_$next\n")
 
-        case IRParallelExec(schedulerPc, _, branches, breakExit) =>
+        case IRParallelExec(schedulerPc, _, _, branches, breakExit) =>
           parallelBlockNum += 1
           sb.append("if\n")
           var branchNumber = 1
@@ -219,10 +221,10 @@ class Promela extends TargetTranslator {
           sb.append(indent * 2 + s":: else -> goto L_$breakExit\n")
           sb.append(indent + "fi;\n")
 
-        case IRParallelEnd(_, s, joinPc) =>
+        case IRParallelEnd(_, _, s, joinPc) =>
           sb.append(s"${getSchedVarName(s._1, s._2)} = 0; goto L_${s._1}\n")
 
-        case IREnd(_, _) =>
+        case IREnd(_, _, _) =>
           sb.append(s"goto L_END_ACTOR_$name\n")
       }
     }
@@ -239,13 +241,13 @@ class Promela extends TargetTranslator {
     val queues = mutable.Set[String]()
 
     actors.values.foreach(_.values.foreach {
-      case IRQueuePush(_, _, _, q, m) =>
+      case IRQueuePush(_, _, _, _, q, m) =>
         queues.add(q)
         messages.add(m)
-      case IRQueuePop(_, _, _, q, m) =>
+      case IRQueuePop(_, _, _, _, q, m) =>
         queues.add(q)
         messages.add(m)
-      case IRBranch(_, _, cases, _) =>
+      case IRBranch(_, _, _, cases, _) =>
         cases.foreach { c =>
           queues.add(c.queueName)
           messages.add(c.msg)

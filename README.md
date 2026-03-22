@@ -7,13 +7,15 @@ Telecom protocols Verification Language
 - SBT
 - Target model checker
   - For TLA+, make sure you have `pcal` and `tlc` set, e.g.
-    - ```
-      pcal() { java -cp <path to tla2tools.jar> -XX:+UseParallelGC -DTLA-Library= pcal.trans "$@"; }
-      export -f pcal
+    - ~/.local/bin/tlc:
       ```
-    - ```
-      tlc() { java -cp <path to tla2tools.jar> -XX:+UseParallelGC -DTLA-Library= tlc2.TLC "$@"; }
-      export -f tlc
+      #!/bin/bash
+      java -cp /path/to/tla2tools.jar tlc2.TLC "$@"
+      ```
+    - ~/.local/bin/pcal:
+      ```
+      #!/bin/bash
+      java -cp /path/to/tla2tools.jar pcal.trans "$@"
       ```
 
 ### Building from scratch for the first time

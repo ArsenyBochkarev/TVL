@@ -35,11 +35,7 @@ if [ $? -eq 1 ]; then
   exit 1
 fi
 
-if [[ "$TARGET" == "tla" ]]; then
-  pcal $OUTPUT
-  tlc $OUTPUT
-elif [[ "$TARGET" == "spin" ]]; then
-  spin -a $OUTPUT
-  gcc -O2 pan.c -o pan.out
-  ./pan.out -a -f
-fi
+DIR=$(dirname "$INPUT")
+BASE=$(basename "$INPUT" .tvl) 
+MAP_PATH="$DIR/${BASE}.map.json"
+python3 verifier.py $TARGET $OUTPUT $INPUT $MAP_PATH

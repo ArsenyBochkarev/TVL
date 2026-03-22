@@ -82,10 +82,12 @@ class PlusCal extends TargetTranslator {
     val sortedIds = instructions.keys.toSeq.sorted
     sortedIds.foreach { id =>
       // We don't insert user-defined labels for this target
-      sb.append(s"L_$id:\n")
+      val labelName = s"L_$id"
+      sb.append(s"$labelName:\n")
       val instr = instructions(id)
+      getMapper.add(labelName, instr.lineNumber)
       instr match {
-        case IRQueuePush(_, s, next, q, msg) =>
+        case IRQueuePush(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)
           val queue = s"queues[\"$qName\"]"
           if isParallel(instr) then
@@ -93,7 +95,7 @@ class PlusCal extends TargetTranslator {
           else
             sb.append(indent + s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
 
-        case IRQueuePop(_, s, next, q, msg) =>
+        case IRQueuePop(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)
           val queue = s"queues[\"$qName\"]"
           if isParallel(instr) then
@@ -107,10 +109,10 @@ class PlusCal extends TargetTranslator {
             sb.append(indent + s"goto L_$next;\n")
           msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(msg)}\" ~> cur_msg_$msg = Head($queue))"
 
-        case IRJump(_, _, target) =>
+        case IRJump(_, _, _, target) =>
           sb.append(s"goto L_$target;\n")
 
-        case IRJumpGuard(_, s, next, guardVar, target, _) =>
+        case IRJumpGuard(_, _, s, next, guardVar, target, _) =>
           if isParallel(instr) then
             sb.append(indent + s"if $guardVar > 0 then\n")
             sb.append(indent * 2 + s"$guardVar := $guardVar - 1;\n")
@@ -126,7 +128,7 @@ class PlusCal extends TargetTranslator {
             sb.append(indent * 2 + s"goto L_$next;\n")
             sb.append(indent + s"end if;\n")
 
-        case IRChoice(_, s, branches) =>
+        case IRChoice(_, _, s, branches) =>
           sb.append(indent + s"either\n")
           if isParallel(instr) then
             branches.zipWithIndex.foreach { case (b, i) =>
@@ -140,7 +142,7 @@ class PlusCal extends TargetTranslator {
             }
           sb.append(indent + s"end either;\n")
 
-        case IRBranch(_, s, cases, otherwise) =>
+        case IRBranch(_, _, s, cases, otherwise) =>
           sb.append(indent + "either\n")
           if isParallel(instr) then
             cases.zipWithIndex.foreach { case (c, i) =>
@@ -166,10 +168,10 @@ class PlusCal extends TargetTranslator {
           sb.append(indent + "end either;\n")
         // TODO: otherwise
 
-        case IRSkip(_, _, next) =>
+        case IRSkip(_, _, _, next) =>
           sb.append(s"skip; goto L_$next\n;")
 
-        case IRParallelExec(schedulerPc, _, branches, breakExit) =>
+        case IRParallelExec(schedulerPc, _, _, branches, breakExit) =>
           sb.append(indent + "either\n")
           var branchNumber = 1
           branches.zipWithIndex.foreach { (b, i) =>
@@ -213,10 +215,10 @@ class PlusCal extends TargetTranslator {
           sb.append(indent * 2 + s"goto L_$breakExit;\n")
           sb.append(indent + "end either;\n")
 
-        case IRParallelEnd(_, s, joinPc) =>
+        case IRParallelEnd(_, _, s, joinPc) =>
           sb.append(s"${getSchedVarName(s._1, s._2)} := 0; goto L_${s._1};\n")
 
-        case IREnd(_, _) =>
+        case IREnd(_, _, _) =>
           sb.append(s"goto L_END_ACTOR_$name;\n")
       }
     }
@@ -231,9 +233,9 @@ class PlusCal extends TargetTranslator {
   private def collectGlobalInfo(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): Set[String] = {
     val queues = mutable.Set[String]()
     actors.values.foreach(_.values.foreach {
-      case IRQueuePush(_, _, _, q, m) => queues.add(q);
-      case IRQueuePop(_, _, _, q, m) => queues.add(q);
-      case IRBranch(_, _, cases, _) => cases.foreach { c => queues.add(c.queueName) }
+      case IRQueuePush(_, _, _, _, q, m) => queues.add(q);
+      case IRQueuePop(_, _, _, _, q, m) => queues.add(q);
+      case IRBranch(_, _, _, cases, _) => cases.foreach { c => queues.add(c.queueName) }
       case _ =>
     })
     queues.toSet

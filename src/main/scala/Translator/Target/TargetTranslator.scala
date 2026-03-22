@@ -2,6 +2,7 @@ package Translator.Target
 
 import Translator.IR.{IRInstruction, IRJumpGuard, IRParallelExec, IRQueuePush}
 import Translator.UserSpec
+import Translator.Mapping.SourceMapper
 
 import scala.collection.mutable
 
@@ -13,6 +14,9 @@ def targetIsValid(target: String): Boolean =
   }
 
 trait TargetTranslator:
+  private val sourceMapper: SourceMapper = SourceMapper()
+  def getMapper: SourceMapper = sourceMapper
+
   private val allProperties: Set[String] = Set("all", "finishing", "msg", "validity")
   private var enabledProperties: Set[String] = Set("all")
   def setEnabledProperties(props: String): Unit = {
@@ -56,7 +60,7 @@ trait TargetTranslator:
   // Messages variables
   def collectMsgVars(instrs: Iterable[IRInstruction]): Set[String] = {
     instrs.collect {
-      case IRQueuePush(_, _, _, _, name) => name
+      case IRQueuePush(_, _, _, _, _, name) => name
     }.toSet
   }
   def getSchedVarName(parallelBlockNum: Int, branchNum: Int): String =
@@ -64,13 +68,13 @@ trait TargetTranslator:
   // Guard vars for loops
   def collectGuardVars(instrs: Iterable[IRInstruction]): Set[(String, Int)] = {
     instrs.collect {
-      case IRJumpGuard(_, _, _, v, _, i) => (v, i)
+      case IRJumpGuard(_, _, _, _, v, _, i) => (v, i)
     }.toSet
   }
   // Scheduler vars for parallel blocks
   def collectSchedVars(instrs: Iterable[IRInstruction]): List[(Int, Int)] = {
     instrs.collect {
-      case IRParallelExec(schedulerPc, _, b, _) => (schedulerPc, b.size)
+      case IRParallelExec(schedulerPc, _, _, b, _) => (schedulerPc, b.size)
     }.toList
   }
   def isParallel(inst: IRInstruction): Boolean = inst.scheduler._1 != -1

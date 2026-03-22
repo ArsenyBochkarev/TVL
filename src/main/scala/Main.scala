@@ -1,6 +1,7 @@
 import org.antlr.v4.runtime.*
 import Grammar.*
 import Translator.*
+import Translator.Mapping.SourceMapper
 import Translator.Target.{TargetTranslator, *}
 
 import java.io.{File, PrintWriter}
@@ -36,6 +37,8 @@ def parse(input: String, output: String, target: String, debug: Boolean, enabled
     writer.println(translator.getMsgDeliveredProperty)
     writer.println(translator.getValidityProperty)
     writer.println(customSpecs)
+
+    translator.getMapper.saveMapping(input)
   } finally {
     writer.close()
   }

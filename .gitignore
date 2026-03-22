@@ -86,3 +86,7 @@ __tlacache__
 *.cfg
 *.old
 *.bin
+
+
+### TVL mappings ###
+*.map.json
