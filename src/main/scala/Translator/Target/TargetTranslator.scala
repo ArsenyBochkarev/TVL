@@ -14,6 +14,10 @@ def targetIsValid(target: String): Boolean =
   }
 
 trait TargetTranslator:
+  private var outputFileName: String = ""
+  def setOutputFileName(s: String): Unit = outputFileName = s
+  def getOutputFileName: String = outputFileName
+
   private val sourceMapper: SourceMapper = SourceMapper()
   def getMapper: SourceMapper = sourceMapper
 

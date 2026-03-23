@@ -23,7 +23,7 @@ class PlusCal extends TargetTranslator {
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
 
-    sb.append("----------------------------- MODULE test -----------------------------\n")
+    sb.append(s"----------------------------- MODULE ${getOutputFileName} -----------------------------\n")
     sb.append("EXTENDS Naturals, Sequences, TLC\n\n")
     sb.append("(* --algorithm test\n")
 

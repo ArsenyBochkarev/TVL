@@ -4,7 +4,7 @@ import java.io.{File, PrintWriter}
 import scala.collection.mutable
 
 class SourceMapper {
-  // Mapping: label name -> source file line number
+  // Mapping: label name in translated file -> source file line number
   private val mapping = mutable.LinkedHashMap[String, Int]()
 
   def add(label: String, line: Int): Unit = {
@@ -26,6 +26,5 @@ class SourceMapper {
     } finally {
       writer.close()
     }
-    println(s"[SourceMapper] Saved mapping to $mapPath")
   }
 }

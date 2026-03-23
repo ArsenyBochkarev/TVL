@@ -58,7 +58,10 @@ src/main/scala/Grammar/*.tokens
 src/main/scala/Grammar/*.interp
 
 ### SPIN ###
+examples/*/states/*
+states/*
 *.pml
+*.pml.trail
 pan
 pan.c
 pan.b

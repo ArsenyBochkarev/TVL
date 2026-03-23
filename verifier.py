@@ -1,3 +1,4 @@
+import shutil
 import sys
 import subprocess
 import re
@@ -12,6 +13,10 @@ SPIN_CMD = "spin"
 
 IGNORED_PATTERNS = [
     r"^cur_msg_.*",
+    r"recv_Q_*",
+    r"send_Q_*",
+    r".*_finished = 1",
+    r"\(run \w+\(\)\)",
     r".*_finished$",
     r"^sched_block.*_branch.*"
 ]
@@ -128,28 +133,123 @@ def parse_tla_output(output, source_map, source_code):
     elif "No error" in output or "states generated" in output:
         print("\nVERIFICATION SUCCESSFUL (TLA+)")
 
+def extract_labels_from_pml(pml_file):
+    labels = {}
+    if not os.path.exists(pml_file):
+        return labels
+    try:
+        with open(pml_file, 'r', encoding='utf-8') as f:
+            lines = f.readlines()
+        label_pattern = re.compile(r'^\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:')
+        for i, line in enumerate(lines, start=1):
+            match = label_pattern.match(line)
+            if match:
+                labels[i] = match.group(1)
+    except Exception as e:
+        print(f"Warning: could not parse labels from {pml_file}: {e}")
+    return labels
+
 def parse_spin_output(target_file, source_map, source_code):
-    run_cmd(f"{SPIN_CMD} -a {target_file}")
-    run_cmd("gcc -O2 pan.c -o pan.out")
-    pan_result = run_cmd("./pan.out -a -f")
+    # This will parse source file to extract labels position (trail output doesn't contain labels)
+    try:
+        with open(target_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        ltl_names = re.findall(r"ltl\s+([a-zA-Z0-9_]+)", content)
+    except Exception as e:
+        print(f"Error reading model file: {e}")
+        return
 
-    if "errors: 0" in pan_result.stdout:
-        print("\nVERIFICATION SUCCESSFUL (SPIN)")
-    else:
-        print("\n" + "="*50 + "\nVERIFICATION FAILED (SPIN)\n" + "="*50)
-        trace_result = run_cmd(f"{SPIN_CMD} -t -p {target_file}")
-        trace_lines = re.findall(r"proc\s+\d+\s+\((.*?)(?::\d+)?\).*?\[(.*?)\]", trace_result.stdout)
+    if not ltl_names:
+        print("No LTL formulas found")
+        return
 
-        step_count = 1
-        for actor, action in trace_lines:
-            if action.startswith("((") or action == "else" or is_ignored(action):
-                continue
-            if step_count > MAX_TRACE_STEPS:
-                break
+    pml_labels = extract_labels_from_pml(target_file)
 
-            source_line = source_map.get(action)
-            print_unified_step(step_count, actor, action, source_line, source_code)
-            step_count += 1
+    base_name = os.path.basename(target_file)
+    local_trail = f"{base_name}.trail"
+    target_trail = f"{target_file}.trail"
+
+    for prop in ltl_names:
+        header = f" CHECKING PROPERTY: {prop} " if prop else " CHECKING DEFAULT PROPERTIES "
+        print(f"\n{'='*20}{header}{'='*20}")
+
+        gen_cmd = f"{SPIN_CMD} -a {target_file}"
+        run_cmd(gen_cmd)
+        run_cmd("gcc -O2 pan.c -o pan.out")
+        pan_result = run_cmd(f"./pan.out -a -f -N {prop}")
+
+        if "errors: 0" in pan_result.stdout:
+            print(f"RESULT: SUCCESS for {prop if prop else 'model'}")
+        else:
+            print(f"RESULT: FAILED for {prop if prop else 'model'}")
+            print("-" * 50)
+
+            if os.path.exists(local_trail):
+                shutil.copy2(local_trail, target_trail)
+
+            trace_cmd = f"{SPIN_CMD} -t -p {target_file}"
+            trace_result = run_cmd(trace_cmd)
+
+            proc_re = re.compile(r'proc\s+\d+\s+\(([^)]+)\)')
+            line_re = re.compile(r':(\d+)\s+\(state')
+            action_re = re.compile(r'\[(.*?)\]')
+
+            steps = []
+            for line in trace_result.stdout.split('\n'):
+                if 'proc' not in line:
+                    continue
+                proc_match = proc_re.search(line)
+                if not proc_match:
+                    continue
+
+                actor = proc_match.group(1).split(':')[0]
+                line_match = line_re.search(line)
+                pml_line = int(line_match.group(1)) if line_match else None
+
+                action_match = action_re.search(line)
+                action_raw = action_match.group(1) if action_match else ""
+                if not action_raw:
+                    continue
+                if action_raw.startswith('((') or action_raw == 'else' or is_ignored(action_raw):
+                    continue
+
+                action_clean = action_raw.split('(')[0].strip()
+
+                label = None
+                if pml_line is not None:
+                    candidates = [ln for ln in pml_labels.keys() if ln <= pml_line]
+                    if candidates:
+                        nearest_line = max(candidates)
+                        label = pml_labels[nearest_line]
+
+                source_line = source_map.get(label) if label else None
+                action_for_print = label if label else action_clean
+
+                steps.append({
+                    'actor': actor,
+                    'action': action_for_print,
+                    'source_line': source_line,
+                })
+
+            step_count = 1
+            for step in steps:
+                if step_count > MAX_TRACE_STEPS:
+                    break
+                print_unified_step(
+                    step_count,
+                    step['actor'],
+                    step['action'],
+                    step['source_line'],
+                    source_code,
+                    ""
+                )
+                step_count += 1
+
+            # Trails file named the same for different properties, so cleaning them once finished with current property
+            trail_file = f"{os.path.basename(target_file)}.trail"
+            if os.path.exists(trail_file):
+                os.remove(trail_file)
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 3:

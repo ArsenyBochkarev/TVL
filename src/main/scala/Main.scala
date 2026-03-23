@@ -5,6 +5,7 @@ import Translator.Mapping.SourceMapper
 import Translator.Target.{TargetTranslator, *}
 
 import java.io.{File, PrintWriter}
+import java.nio.file.Paths
 
 def parse(input: String, output: String, target: String, debug: Boolean, enabledProps: String): Unit = {
   if !targetIsValid(target) then
@@ -24,6 +25,11 @@ def parse(input: String, output: String, target: String, debug: Boolean, enabled
     case "spin" => new Promela()
     case "tla" => new PlusCal()
   }
+
+  val path = Paths.get(output)
+  val fileNameWithExt = path.getFileName.toString
+  val fileNameWithoutExt = fileNameWithExt.takeWhile(_ != '.')
+  translator.setOutputFileName(fileNameWithoutExt)
 
   translator.setEnabledProperties(enabledProps)
   translator.setUserLabels(visitor.getLabels)

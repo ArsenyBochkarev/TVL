@@ -1,11 +1,10 @@
 #!/bin/bash
 
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-  echo "Usage: ./translate <input_file> <output_file> <target>"
+  echo "Usage: ./translate <input_file> <target>"
   echo ""
   echo "Arguments:"
   echo "  <input_file>   Path to the source TVL file."
-  echo "  <output_file>  Path where the generated code will be saved."
   echo "  <target>       Target model checker: 'tla', 'spin'."
   echo "  --props=...    (Optional) Comma-separated list of properties to generate."
   echo "                 Available: finishing, msg, validity, all (default)."
@@ -15,14 +14,23 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   exit 0
 fi
 
-if [ "$#" -lt 3 ]; then
+if [ "$#" -lt 2 ]; then
   echo "Error: Not enough arguments provided."
   exit 1
 fi
 
 INPUT=$1
-OUTPUT=$2
-TARGET=$3
+TARGET=$2
+
+# Construct output file name
+if [[ "$TARGET" == "tla" ]]; then
+  EXT="tla"
+else
+  EXT="pml"
+fi
+DIR=$(dirname "$INPUT")
+BASE=$(basename "$INPUT" .tvl)
+OUTPUT="$DIR/${BASE}.${EXT}"
 
 PROPS="all"
 if [[ "$4" == --props=* ]]; then
@@ -35,7 +43,5 @@ if [ $? -eq 1 ]; then
   exit 1
 fi
 
-DIR=$(dirname "$INPUT")
-BASE=$(basename "$INPUT" .tvl) 
 MAP_PATH="$DIR/${BASE}.map.json"
 python3 verifier.py $TARGET $OUTPUT $INPUT $MAP_PATH
