@@ -52,9 +52,9 @@ def print_unified_step(step_num, actor, action, source_line=None, source_code=No
         line_idx = int(source_line) - 1
         if 0 <= line_idx < len(source_code):
             code_text = source_code[line_idx].strip()
-            action_info = f"{action} -> `{code_text}` (line {source_line})"
+            action_info = f"`{code_text}`, line {source_line} ({action} in generated code)"
     elif source_line:
-        action_info = f"{action} (line {source_line})"
+        action_info = f"line {source_line} ({action} in generated code)"
 
     print(f"  Action : {action_info}")
     if state_diff:
