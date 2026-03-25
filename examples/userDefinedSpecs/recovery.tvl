@@ -1,0 +1,22 @@
+module Test
+
+actor Worker {
+    repeat {
+        init: send Ping to Supervisor
+        choose {
+            fail_crash: skip
+            start_recovery: send Ping to Supervisor
+        } or {
+            send Data to Supervisor
+        }
+    }
+}
+
+actor Supervisor {
+    repeat {
+        receive alts {
+            Ping from Worker => { skip }
+            Data from Worker => { skip }
+        }
+    }
+}

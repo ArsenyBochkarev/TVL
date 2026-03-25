@@ -1,0 +1,26 @@
+module Test
+
+actor Sender {
+    repeat {
+        choose {
+            send Data to Receiver
+        } or {
+            // Simulating timeout (data was lost)
+            expired_msg_Data: send DataLoss to Receiver
+        }
+    }
+}
+
+actor Receiver {
+    repeat {
+        receive alts {
+            Data from Sender => {
+                // Do smth
+                skip
+            }
+            DataLoss from Sender => {
+                Data_loss_detected: skip
+            }
+        }
+    }
+}
