@@ -61,22 +61,32 @@ class ASTVisitor(val debug: Boolean = false) {
       val startLabels = labelNames.filter(_.toLowerCase.startsWith("start"))
 
       if (failLabels.nonEmpty && startLabels.nonEmpty) {
+        var recovNum = 0
         failLabels.foreach { fail =>
           startLabels.foreach { start =>
             val formula = s"[] ($actor.$fail -> <> $actor.$start)"
-            userSpecs.append(UserSpec("ltl", s"RecoveryProperty_${actor}_$fail", formula))
+            userSpecs.append(UserSpec("ltl", s"RecoveryProperty_${actor}_${fail}_$recovNum", formula))
+            recovNum += 1
           }
         }
       }
 
-      // Loss Detection: [] (expired_msg => msg_was_received)
-      val expiredLabels = labelNames.filter(_.toLowerCase.startsWith("expired_msg_"))
+      // Loss Detection: [] (expired_msg => <> msg_loss_detected)
+      // These labels should be in different actors
+      val expiredLabels = labelNames.filter(_.startsWith("expired_msg_"))
+      var lossDetectNum = 0
       expiredLabels.foreach { expLabel =>
         val msgName = expLabel.stripPrefix("expired_msg_")
-        val labelPC = receiveMap.get(actor).get(msgName)
-        labels.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName + "_received", labelPC)
-        val formula = s"[] ($actor.$expLabel => $actor.$msgName)"
-        userSpecs.append(UserSpec("ltl", s"LossDetection_${actor}_$expLabel", formula))
+        labels.foreach { (otherActor, otherActorLabels) =>
+          if (otherActor != actor)
+            val otherActorLabelNames = otherActorLabels.keys.toList
+            val lossDetectLabels = otherActorLabelNames.filter(_.endsWith("_loss_detected"))
+            lossDetectLabels.filter(_.equals(s"${msgName}_loss_detected")).foreach { ldLabel =>
+              val formula = s"[] ($actor.$expLabel -> <>($otherActor.$ldLabel))"
+              userSpecs.append(UserSpec("ltl", s"LossDetection_${actor}_${expLabel}_$lossDetectNum", formula))
+              lossDetectNum += 1
+            }
+        }
       }
     }
 
