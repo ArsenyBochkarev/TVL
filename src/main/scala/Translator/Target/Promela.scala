@@ -262,6 +262,10 @@ class Promela extends TargetTranslator {
       case "ltl" => true
       case "ctl" => false
   override def formatLTL(name: String, formula: String): String =
+    // Normalize 'G' and 'F', if any
+    val normalizedFormula = formula
+      .replaceAll("\\bG\\b", "[]")
+      .replaceAll("\\bF\\b", "<>")
     val spinFormula = formula.replaceAll("([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)", "$1@$2")
     s"ltl $name { $spinFormula }"
   override def formatCTL(name: String, formula: String): String =

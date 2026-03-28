@@ -58,7 +58,6 @@ trait TargetTranslator:
   def formatLTL(name: String, formula: String): String
   def formatCTL(name: String, formula: String): String
 
-  // TODO: check if we should move it to Promela target
   def getChannelName(n: String): String = n.replaceAll("\\[", "_").replaceAll("]", "").replaceAll("[^a-zA-Z0-9_]", "_")
   def getMsgName(m: String): String = s"MSG_$m"
   // Messages variables

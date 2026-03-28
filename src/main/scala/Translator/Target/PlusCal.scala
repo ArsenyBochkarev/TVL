@@ -18,12 +18,12 @@ class PlusCal extends TargetTranslator {
     else "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
   override def getValidityProperty: String =
     if (!isPropEnabled("validity") || finishedProperties.isEmpty) ""
-    else s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN queues: Len(queues[q]) = 0))\n"
+    else s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN channels: Len(channels[q]) = 0))\n"
 
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
 
-    sb.append(s"----------------------------- MODULE ${getOutputFileName} -----------------------------\n")
+    sb.append(s"----------------------------- MODULE $getOutputFileName -----------------------------\n")
     sb.append("EXTENDS Naturals, Sequences, TLC\n\n")
     sb.append("(* --algorithm test\n")
 
@@ -31,9 +31,9 @@ class PlusCal extends TargetTranslator {
     val queues = collectGlobalInfo(actors)
     if (queues.nonEmpty) {
       val qInit = queues.map(q => s"${getChannelName(q)} |-> <<>>").mkString(", ")
-      sb.append(s"${indent}queues = [ $qInit ];\n")
+      sb.append(s"${indent}channels = [ $qInit ];\n")
     } else {
-      sb.append(s"${indent}queues = <<>>;\n")
+      sb.append(s"${indent}channels = <<>>;\n")
     }
     sb.append("\n")
 
@@ -89,7 +89,7 @@ class PlusCal extends TargetTranslator {
       instr match {
         case IRQueuePush(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)
-          val queue = s"queues[\"$qName\"]"
+          val queue = s"channels[\"$qName\"]"
           if isParallel(instr) then
             sb.append(s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
           else
@@ -97,7 +97,7 @@ class PlusCal extends TargetTranslator {
 
         case IRQueuePop(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)
-          val queue = s"queues[\"$qName\"]"
+          val queue = s"channels[\"$qName\"]"
           if isParallel(instr) then
             sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
             sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
@@ -148,7 +148,7 @@ class PlusCal extends TargetTranslator {
             cases.zipWithIndex.foreach { case (c, i) =>
               if (i > 0) sb.append(indent + s"or\n")
               val qName = getChannelName(c.queueName)
-              val queue = s"queues[\"$qName\"]"
+              val queue = s"channels[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
               sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart};\n")
@@ -159,7 +159,7 @@ class PlusCal extends TargetTranslator {
             cases.zipWithIndex.foreach { case (c, i) =>
               if (i > 0) sb.append(indent + s"or\n")
               val qName = getChannelName(c.queueName)
-              val queue = s"queues[\"$qName\"]"
+              val queue = s"channels[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
               msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
@@ -246,6 +246,11 @@ class PlusCal extends TargetTranslator {
       case "ltl" => true
       case "ctl" => false
   override def formatLTL(name: String, formula: String): String =
+    // Normalize 'G' and 'F', if any
+    val normalizedFormula = formula
+      .replaceAll("\\bG\\b", "[]")
+      .replaceAll("\\bF\\b", "<>")
+
     // Patterns <actor name>.<label>
     val pattern = "([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)".r
 
