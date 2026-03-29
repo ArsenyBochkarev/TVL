@@ -162,7 +162,13 @@ class Promela extends TargetTranslator {
           if isParallel(instr) then
             sb.append("if\n")
             cases.foreach { c =>
-              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              otherwise match {
+                case Some(_) =>
+                  sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? [${getMsgName(c.msg)}] ->\n")
+                  sb.append(indent * 3 + s"${getChannelName(c.queueName)} ? ${getMsgName(c.msg)};\n")
+                case None =>
+                  sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              }
               sb.append(indent * 3 + s"${getSchedVarName(s._1, s._2)} = ${c.bodyStart};\n")
               sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; \n")
               msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} == true))"
@@ -172,13 +178,24 @@ class Promela extends TargetTranslator {
           else
             sb.append("if\n")
             cases.foreach { c =>
-              sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              otherwise match {
+                case Some(_) =>
+                  sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? [${getMsgName(c.msg)}] ->\n")
+                  sb.append(indent * 3 + s"${getChannelName(c.queueName)} ? ${getMsgName(c.msg)};\n")
+                case None =>
+                  sb.append(indent * 2 + s":: ${getChannelName(c.queueName)} ? ${getMsgName(c.msg)} ->\n")
+              }
               sb.append(indent * 3 + s"atomic { recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} = true; }; \n")
               msgDeliveredProperties = msgDeliveredProperties :+ s"[] (send_${getChannelName(c.queueName)}_${getMsgName(c.msg)} -> <> (recv_${getChannelName(c.queueName)}_${getMsgName(c.msg)} == true))"
               sb.append(indent * 3 + s"goto L_${c.bodyStart};\n")
             }
+            otherwise match {
+              case Some(owStart) =>
+                sb.append(indent * 2 + s":: else ->\n")
+                sb.append(indent * 3 + s"goto L_$owStart;\n")
+              case None =>
+            }
             sb.append(indent + "fi;\n")
-          // TODO: otherwise
 
         case IRSkip(_, _, _, next) =>
           sb.append(s"skip; goto L_$next\n")
@@ -266,7 +283,7 @@ class Promela extends TargetTranslator {
     val normalizedFormula = formula
       .replaceAll("\\bG\\b", "[]")
       .replaceAll("\\bF\\b", "<>")
-    val spinFormula = formula.replaceAll("([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)", "$1@$2")
+    val spinFormula = normalizedFormula.replaceAll("([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)", "$1@$2")
     s"ltl $name { $spinFormula }"
   override def formatCTL(name: String, formula: String): String =
     println("Error: CTL is not supported for PlusCal target")

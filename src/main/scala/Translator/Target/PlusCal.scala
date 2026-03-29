@@ -166,7 +166,27 @@ class PlusCal extends TargetTranslator {
               sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
             }
           sb.append(indent + "end either;\n")
-        // TODO: otherwise
+
+          otherwise match {
+            case Some(otherwiseStart) =>
+              // Negation for all other conditions
+              sb.append(indent + s"or\n")
+              val otherwiseGuard = cases.map { c =>
+                val qName = getChannelName(c.queueName)
+                val queue = s"channels[\"$qName\"]"
+                s"(Len($queue) = 0 \\/ Head($queue) /= \"${getMsgName(c.msg)}\")"
+              }.mkString(s" $and ")
+
+              if (otherwiseGuard.nonEmpty) {
+                sb.append(indent * 2 + s"await $otherwiseGuard;\n")
+              }
+              if isParallel(instr) then
+                sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := $otherwiseStart;\n")
+                sb.append(indent * 2 + s"goto L_${s._1};\n")
+              else
+                sb.append(indent * 2 + s"goto L_$otherwiseStart;\n")
+            case None =>
+          }
 
         case IRSkip(_, _, _, next) =>
           sb.append(s"skip; goto L_$next\n;")
@@ -256,7 +276,7 @@ class PlusCal extends TargetTranslator {
 
     // pc[<actor name>] = <label for corresponding instruction ID>
     // Inserting user-defined label breaks (a little) atomic semantics for labels
-    var tlaFormula = pattern.replaceAllIn(formula, m => {
+    var tlaFormula = pattern.replaceAllIn(normalizedFormula, m => {
       val actor = m.group(1)
       val label = m.group(2)
       val id = userLabels.get(actor).flatMap(_.get(label))

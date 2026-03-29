@@ -170,9 +170,18 @@ class ASTVisitor(val debug: Boolean = false) {
         QueueCondition(qName, msgName, bodyStart)
       }.toList
 
-      // TODO: add otherwise case to grammar and handle it here
+      val otherwiseStart = if (rAlts.otherwise_case() != null) {
+        val otherwiseCase = rAlts.otherwise_case()
+        val otherwiseBodyStart = nextId()
+        val otherwiseBodyEnd = translateBlock(otherwiseCase.block(), actor, otherwiseBodyStart)
+        val jumpInstr = IRJump(otherwiseBodyEnd, otherwiseCase.getStart.getLine, scheduler, exitPc)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(otherwiseBodyEnd, jumpInstr)
+        Some(otherwiseBodyStart)
+      } else {
+        None
+      }
 
-      val branchInstr = IRBranch(currentPc, rAlts.getStart.getLine, scheduler, cases, None)
+      val branchInstr = IRBranch(currentPc, rAlts.getStart.getLine, scheduler, cases, otherwiseStart)
       actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, branchInstr)
       exitPc
     }
