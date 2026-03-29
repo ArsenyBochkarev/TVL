@@ -71,6 +71,7 @@ pan.t
 pan.m
 pan.p
 pan.out
+*.nvr
 
 ### TLA+ ###
 *.tla
@@ -89,6 +90,8 @@ __tlacache__
 *.cfg
 *.old
 *.bin
+*.out
+*.tlc
 
 
 ### TVL mappings ###

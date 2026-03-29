@@ -1,7 +1,11 @@
 package Translator.Target
 
 import Translator.IR.*
+import Translator.UserSpec
+
 import scala.collection.mutable
+import java.nio.file.Paths
+import java.io.{FileWriter, PrintWriter, BufferedWriter}
 
 class PlusCal extends TargetTranslator {
   private val indent = "    "
@@ -18,12 +22,50 @@ class PlusCal extends TargetTranslator {
     else "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
   override def getValidityProperty: String =
     if (!isPropEnabled("validity") || finishedProperties.isEmpty) ""
-    else s"ValidityProperty == ([](${finishedProperties.mkString(s"\n$and ")}) => (\\A q \\in DOMAIN channels: Len(channels[q]) = 0))\n"
+    else
+      val sb = new StringBuilder()
+      sb.append(s"ValidityProperty == []((${finishedProperties.mkString(s"\n$and ")}) => (")
+      channels.foreach { chan =>
+        sb.append(s"Len(channels[\"$chan\"]) = 0 $and ")
+      }
+      sb.setLength(sb.length - 4)
+      sb.append("))")
+      sb.toString()
 
+  override def generateUserSpecs(specs: List[UserSpec], targetName: String): String = {
+    val sb = new StringBuilder()
+    specs.foreach { spec =>
+      if logicIsSupported(spec.logic) then
+        sb.append(formatLTL(spec.name, spec.formula))
+        sb.append("\n")
+      else
+        println(s"[WARNING] Target '$targetName' does not support ${spec.logic} logic used by '${spec.name}' property. Skipping.")
+    }
+    sb.append("=============================================================================\n")
+
+    // We also need to add them to .cfg file
+    val path = Paths.get(getOutputFile)
+    val fileWithExt = path.toString
+    val fileWithoutExt = fileWithExt.takeWhile(_ != '.')
+    val fileName = fileWithoutExt + ".cfg"
+    val writer = new BufferedWriter(new FileWriter(fileName, true))
+    try {
+      userSpecs.foreach { spec => writer.write(indent + s"$spec\n") }
+    } finally {
+      writer.close()
+    }
+
+    sb.toString()
+  }
+
+  private var channels: List[String] = List.empty[String]
   override def translate(actors: mutable.Map[String, mutable.Map[Int, IRInstruction]]): String = {
     val sb = new StringBuilder()
 
-    sb.append(s"----------------------------- MODULE $getOutputFileName -----------------------------\n")
+    val path = Paths.get(getOutputFile)
+    val fileNameWithExt = path.getFileName.toString
+    val outputFileName = fileNameWithExt.takeWhile(_ != '.')
+    sb.append(s"----------------------------- MODULE $outputFileName -----------------------------\n")
     sb.append("EXTENDS Naturals, Sequences, TLC\n\n")
     sb.append("(* --algorithm test\n")
 
@@ -31,6 +73,7 @@ class PlusCal extends TargetTranslator {
     val queues = collectGlobalInfo(actors)
     if (queues.nonEmpty) {
       val qInit = queues.map(q => s"${getChannelName(q)} |-> <<>>").mkString(", ")
+      queues.foreach { q => channels = channels :+ getChannelName(q) }
       sb.append(s"${indent}channels = [ $qInit ];\n")
     } else {
       sb.append(s"${indent}channels = <<>>;\n")
@@ -42,7 +85,15 @@ class PlusCal extends TargetTranslator {
     }
 
     sb.append("end algorithm; *)\n")
-    sb.append("=============================================================================\n")
+
+    // We also need to generate .cfg file for TLA+
+    val cfgFileContents = generateCfgFile()
+    val fileWithExt = path.toString
+    val fileWithoutExt = fileWithExt.takeWhile(_ != '.')
+    val writer = new PrintWriter(fileWithoutExt + ".cfg")
+    writer.write(cfgFileContents)
+    writer.close()
+
     sb.toString()
   }
 
@@ -98,16 +149,17 @@ class PlusCal extends TargetTranslator {
         case IRQueuePop(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)
           val queue = s"channels[\"$qName\"]"
-          if isParallel(instr) then
-            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
+          val msgStr = s"\"${getMsgName(msg)}\""
+            if isParallel(instr) then
+            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = $msgStr;\n")
             sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
             sb.append(indent + s"${getSchedVarName(s._1, s._2)} := $next;")
-            sb.append(indent + s"goto L_${s._1}\n")
+            sb.append(indent + s"goto L_${s._1};\n")
           else
-            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(msg)}\";\n")
+            sb.append(indent + s"await Len($queue) > 0 $and Head($queue) = $msgStr;\n")
             sb.append(indent + s"cur_msg_$msg := Head($queue); $queue := Tail($queue);\n")
             sb.append(indent + s"goto L_$next;\n")
-          msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(msg)}\" ~> cur_msg_$msg = Head($queue))"
+          msgDeliveredProperties = msgDeliveredProperties :+ s"(Len($queue) > 0 $and Head($queue) = $msgStr ~> cur_msg_$msg = $msgStr)"
 
         case IRJump(_, _, _, target) =>
           sb.append(s"goto L_$target;\n")
@@ -116,9 +168,9 @@ class PlusCal extends TargetTranslator {
           if isParallel(instr) then
             sb.append(indent + s"if $guardVar > 0 then\n")
             sb.append(indent * 2 + s"$guardVar := $guardVar - 1;\n")
-            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $target; goto L_${s._1}\n")
+            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $target; goto L_${s._1};\n")
             sb.append(indent + s"else\n")
-            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1}\n")
+            sb.append(indent * 2 + s" ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
             sb.append(indent + s"end if;\n")
           else
             sb.append(indent + s"if $guardVar > 0 then\n")
@@ -133,7 +185,7 @@ class PlusCal extends TargetTranslator {
           if isParallel(instr) then
             branches.zipWithIndex.foreach { case (b, i) =>
               if (i > 0) sb.append(indent + s"or\n")
-              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := $b; goto L_${s._1}\n")
+              sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := $b; goto L_${s._1};\n")
             }
           else
             branches.zipWithIndex.foreach { case (b, i) =>
@@ -146,23 +198,27 @@ class PlusCal extends TargetTranslator {
           sb.append(indent + "either\n")
           if isParallel(instr) then
             cases.zipWithIndex.foreach { case (c, i) =>
-              if (i > 0) sb.append(indent + s"or\n")
+              if (i > 0)
+                sb.append(indent + s"or\n")
               val qName = getChannelName(c.queueName)
               val queue = s"channels[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
               sb.append(indent * 2 + s"${getSchedVarName(s._1, s._2)} := ${c.bodyStart};\n")
-              msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
+              val msgStr = s"\"${getMsgName(c.msg)}\""
+              msgDeliveredProperties = msgDeliveredProperties :+ s"(Len($queue) > 0 $and Head($queue) = $msgStr ~> cur_msg_${c.msg} = $msgStr)"
               sb.append(indent * 2 + s"goto L_${s._1};\n")
             }
           else
             cases.zipWithIndex.foreach { case (c, i) =>
-              if (i > 0) sb.append(indent + s"or\n")
+              if (i > 0)
+                sb.append(indent + s"or\n")
               val qName = getChannelName(c.queueName)
               val queue = s"channels[\"$qName\"]"
               sb.append(indent * 2 + s"await Len($queue) > 0 $and Head($queue) = \"${getMsgName(c.msg)}\";\n")
               sb.append(indent * 2 + s"cur_msg_${c.msg} := Head($queue); $queue := Tail($queue);\n")
-              msgDeliveredProperties = msgDeliveredProperties :+ s"(Head($queue) = \"${getMsgName(c.msg)}\" ~> cur_msg_${c.msg} = Head($queue))"
+              val msgStr = s"\"${getMsgName(c.msg)}\""
+              msgDeliveredProperties = msgDeliveredProperties :+ s"(Len($queue) > 0 $and Head($queue) = $msgStr ~> cur_msg_${c.msg} = $msgStr)"
               sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
             }
           sb.append(indent + "end either;\n")
@@ -189,7 +245,7 @@ class PlusCal extends TargetTranslator {
           }
 
         case IRSkip(_, _, _, next) =>
-          sb.append(s"skip; goto L_$next\n;")
+          sb.append(s"skip; goto L_$next;\n")
 
         case IRParallelExec(schedulerPc, _, _, branches, breakExit) =>
           sb.append(indent + "either\n")
@@ -265,7 +321,11 @@ class PlusCal extends TargetTranslator {
     logic match
       case "ltl" => true
       case "ctl" => false
+  private var userSpecs: List[String] = List()
   override def formatLTL(name: String, formula: String): String =
+    // For PlusCal target we also need to store formula's name to generate .cfg file
+    userSpecs = name :: userSpecs
+
     // Normalize 'G' and 'F', if any
     val normalizedFormula = formula
       .replaceAll("\\bG\\b", "[]")
@@ -299,4 +359,23 @@ class PlusCal extends TargetTranslator {
     println("Error: CTL is not supported for PlusCal target")
     System.exit(1)
     ""
+
+  private def generateCfgFile(): String = {
+    val sb = new StringBuilder()
+    sb.append("SPECIFICATION Spec\n\n")
+
+    val properties = mutable.ListBuffer[String]()
+    if (isPropEnabled("finishing") && finishedProperties.nonEmpty)
+      properties.append("FinishingProperty")
+    if (isPropEnabled("msg") && msgDeliveredProperties.nonEmpty)
+      properties.append("MessageDeliveredProperty")
+    if (isPropEnabled("validity") && finishedProperties.nonEmpty)
+      properties.append("ValidityProperty")
+
+    if (properties.nonEmpty) {
+      sb.append("PROPERTIES\n")
+      properties.foreach { p => sb.append(indent + s"$p\n") }
+    }
+    sb.toString()
+  }
 }

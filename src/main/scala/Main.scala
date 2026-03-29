@@ -1,11 +1,9 @@
 import org.antlr.v4.runtime.*
 import Grammar.*
 import Translator.*
-import Translator.Mapping.SourceMapper
 import Translator.Target.{TargetTranslator, *}
 
 import java.io.{File, PrintWriter}
-import java.nio.file.Paths
 
 def parse(input: String, output: String, target: String, debug: Boolean, enabledProps: String): Unit = {
   if !targetIsValid(target) then
@@ -26,24 +24,22 @@ def parse(input: String, output: String, target: String, debug: Boolean, enabled
     case "tla" => new PlusCal()
   }
 
-  val path = Paths.get(output)
-  val fileNameWithExt = path.getFileName.toString
-  val fileNameWithoutExt = fileNameWithExt.takeWhile(_ != '.')
-  translator.setOutputFileName(fileNameWithoutExt)
-
+  translator.setOutputFile(output)
   translator.setEnabledProperties(enabledProps)
   translator.setUserLabels(visitor.getLabels)
 
   val code = translator.translate(ir)
-  val customSpecs = translator.generateUserSpecs(visitor.getUserSpecs, target)
   val writer = new PrintWriter(new File(output))
   try {
     writer.println(code)
+
+    // Properties
     writer.println(translator.getFinishingProperty)
     writer.println(translator.getMsgDeliveredProperty)
     writer.println(translator.getValidityProperty)
-    writer.println(customSpecs)
+    writer.println(translator.generateUserSpecs(visitor.getUserSpecs, target))
 
+    // Mapping for trace
     translator.getMapper.saveMapping(input)
   } finally {
     writer.close()
