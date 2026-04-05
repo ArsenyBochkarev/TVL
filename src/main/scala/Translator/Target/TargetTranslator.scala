@@ -17,6 +17,8 @@ trait TargetTranslator:
   private var outputFileName: String = ""
   def setOutputFile(s: String): Unit = outputFileName = s
   def getOutputFile: String = outputFileName
+  var channelSizeLimit: Int = 20
+  def setChannelSizeLimit(newLimit: Int): Unit = channelSizeLimit = newLimit
 
   private val sourceMapper: SourceMapper = SourceMapper()
   def getMapper: SourceMapper = sourceMapper

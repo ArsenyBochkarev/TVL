@@ -4,13 +4,14 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "Usage: ./translate <input_file> <target>"
   echo ""
   echo "Arguments:"
-  echo "  <input_file>   Path to the source TVL file."
-  echo "  <target>       Target model checker: 'tla', 'spin'."
-  echo "  --props=...    (Optional) Comma-separated list of properties to generate."
-  echo "                 Available: finishing, msg, validity, all (default)."
+  echo "  <input_file>          Path to the source TVL file."
+  echo "  <target>              Target model checker. Options: 'tla', 'spin'."
+  echo "  --props=...           (Optional) Comma-separated list of properties to generate."
+  echo "                        Available: finishing, msg, validity, all (default)."
+  echo "  --channel-size=...    (Optional) Channel size limit. Default: 20."
   echo ""
   echo "Example:"
-  echo "  ./translate src/model.tvl out/model.tla tla --props=finishing,validity"
+  echo "  ./translate src/model.tvl out/model.tla tla --props=finishing,validity --channel-size=10"
   exit 0
 fi
 
@@ -32,12 +33,28 @@ DIR=$(dirname "$INPUT")
 BASE=$(basename "$INPUT" .tvl)
 OUTPUT="$DIR/${BASE}.${EXT}"
 
-PROPS="all"
-if [[ "$4" == --props=* ]]; then
-  PROPS="${4#--props=}"
-fi
 
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS"
+PROPS="all"
+SIZE=20
+
+shift 2
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --props=*)
+      PROPS="${1#--props=}"
+      ;;
+    --channel-size=*)
+      SIZE="${1#--channel-size=}"
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS $SIZE"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1

@@ -10,7 +10,6 @@ import java.io.{FileWriter, PrintWriter, BufferedWriter}
 class PlusCal extends TargetTranslator {
   private val indent = "    "
   private val and = "/\\"
-  private val queueSize = 10 // TODO: we should be able to control it
 
   private var finishedProperties: List[String] = List.empty[String]
   override def getFinishingProperty: String =
@@ -142,9 +141,9 @@ class PlusCal extends TargetTranslator {
           val qName = getChannelName(q)
           val queue = s"channels[\"$qName\"]"
           if isParallel(instr) then
-            sb.append(s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
+            sb.append(s"await Len($queue) < $channelSizeLimit; $queue := Append($queue, \"${getMsgName(msg)}\"); ${getSchedVarName(s._1, s._2)} := $next; goto L_${s._1};\n")
           else
-            sb.append(indent + s"await Len($queue) < $queueSize; $queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
+            sb.append(indent + s"await Len($queue) < $channelSizeLimit; $queue := Append($queue, \"${getMsgName(msg)}\"); goto L_$next;\n")
 
         case IRQueuePop(_, _, s, next, q, msg) =>
           val qName = getChannelName(q)

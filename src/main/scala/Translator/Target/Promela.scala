@@ -45,9 +45,8 @@ class Promela extends TargetTranslator {
     // Create all required channels
     sb.append("/* Channels */\n")
     queues.foreach { qName =>
-      val size = 10 // FIXME: I guess this should be changeable
       channels = channels :+ getChannelName(qName)
-      sb.append(s"chan ${getChannelName(qName)} = [$size] of { mtype };\n")
+      sb.append(s"chan ${getChannelName(qName)} = [$channelSizeLimit] of { mtype };\n")
     }
     sb.append("\n")
 
