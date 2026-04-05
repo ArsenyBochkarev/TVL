@@ -54,6 +54,8 @@ while [[ $# -gt 0 ]]; do
   shift
 done
 
+export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
+
 sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS $SIZE"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
