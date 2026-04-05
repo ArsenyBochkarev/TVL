@@ -7,7 +7,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  <input_file>          Path to the source TVL file."
   echo "  <target>              Target model checker. Options: 'tla', 'spin'."
   echo "  --props=...           (Optional) Comma-separated list of properties to generate."
-  echo "                        Available: finishing, msg, validity, all (default)."
+  echo "                        Available: finishing, msg, validity, none, all (default)."
   echo "  --channel-size=...    (Optional) Channel size limit. Default: 20."
   echo ""
   echo "Example:"

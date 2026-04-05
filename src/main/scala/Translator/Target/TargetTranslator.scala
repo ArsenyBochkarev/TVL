@@ -23,11 +23,15 @@ trait TargetTranslator:
   private val sourceMapper: SourceMapper = SourceMapper()
   def getMapper: SourceMapper = sourceMapper
 
-  private val allProperties: Set[String] = Set("all", "finishing", "msg", "validity")
+  private val allProperties: Set[String] = Set("all", "finishing", "msg", "validity", "none")
   private var enabledProperties: Set[String] = Set("all")
   def setEnabledProperties(props: String): Unit = {
     enabledProperties = props.split(",").map(_.trim.toLowerCase).toSet
+
     for (x <- enabledProperties)
+      if (x.equals("none") && enabledProperties.size > 1)
+        println(s"Error: ambiguous properties. Do not use \"none\" value alongside others.")
+        System.exit(1)
       if (!allProperties.contains(x))
         println(s"Error: erroneous name for generating property. Possible values: " + allProperties.toString())
         System.exit(1)
