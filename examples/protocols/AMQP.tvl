@@ -1,0 +1,101 @@
+module AMQP
+
+actor Client1 {
+	send PayReq to Gateway  
+	receive Ack from Broker
+	repeat {
+		receive alts {
+			Processed from Broker => {
+				send Thanks to Gateway
+				break
+			}
+			Lost from Broker      => { send PayReq to Gateway }
+			Ack from Broker       => { skip }
+		}	
+	}
+}
+
+actor Client2 {
+	send PayReq to Gateway  
+	receive Ack from Broker
+	repeat {
+		receive alts {
+			Processed from Broker => {
+				send Thanks to Gateway
+				break
+			}
+			Lost from Broker      => { send PayReq to Gateway }
+			Ack from Broker       => { skip }
+		}	
+	}
+}
+
+actor Gateway {
+	receive alts {
+		PayReq from Client1 => { send Client1_PayReq to Broker }
+		PayReq from Client2 => { send Client2_PayReq to Broker }
+	}
+	repeat {
+		receive alts {
+			Thanks from Client1 => { break }
+			Thanks from Client2 => { break }
+		}
+	}
+	repeat {
+		receive alts {
+			Thanks from Client1 => { break }
+			Thanks from Client2 => { break }
+		}
+	}
+	send Thanks to Broker
+}
+
+actor Broker {
+	receive alts {
+		Client1_PayReq from Gateway => {
+			send Client1_PayReq to PayProcessor
+			send Ack to Client1
+		}
+		Client2_PayReq from Gateway => {
+			send Client2_PayReq to PayProcessor
+			send Ack to Client2
+		}
+	}
+	repeat {
+		receive alts {
+			Client1_Lost from PayProcessor      => { send Lost to Client1 }
+			Client1_Processed from PayProcessor => { send Processed to Client1 }
+			Client1_TryAgain from PayProcessor  => { send Client1_PayReq to PayProcessor }
+			Client2_Lost from PayProcessor      => { send Lost to Client2 }
+			Client2_Processed from PayProcessor => { send Processed to Client2 }
+			Client2_TryAgain from PayProcessor  => { send Client2_PayReq to PayProcessor }
+			Thanks from Gateway                 => { send Thanks to PayProcessor }
+		}
+	}
+}
+
+actor PayProcessor {
+	repeat {
+		receive alts {
+			Client1_PayReq from Broker => {
+				choose {
+					send Client1_Lost to Broker
+				} or {
+					send Client1_TryAgain to Broker
+				} or {
+					send Client1_Processed to Broker
+				}
+			}
+			Client2_PayReq from Broker => {
+				choose {
+					send Client2_Lost to Broker
+				} or {
+					send Client2_TryAgain to Broker
+				} or {
+					send Client2_Processed to Broker
+				}
+			}
+			Thanks from Broker => { break }
+		}
+	}
+}
