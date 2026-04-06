@@ -180,7 +180,8 @@ class PlusCal extends TargetTranslator {
             sb.append(indent + s"end if;\n")
 
         case IRChoice(_, _, s, branches) =>
-          sb.append(indent + s"either\n")
+          if branches.size > 1 then
+            sb.append(indent + s"either\n")
           if isParallel(instr) then
             branches.zipWithIndex.foreach { case (b, i) =>
               if (i > 0) sb.append(indent + s"or\n")
@@ -191,10 +192,12 @@ class PlusCal extends TargetTranslator {
               if (i > 0) sb.append(indent + s"or\n")
               sb.append(indent * 2 + s"goto L_$b;\n")
             }
-          sb.append(indent + s"end either;\n")
+          if branches.size > 1 then
+            sb.append(indent + s"end either;\n")
 
         case IRBranch(_, _, s, cases, otherwise) =>
-          sb.append(indent + "either\n")
+          if cases.size > 1 then
+            sb.append(indent + "either\n")
           if isParallel(instr) then
             cases.zipWithIndex.foreach { case (c, i) =>
               if (i > 0)
@@ -220,7 +223,6 @@ class PlusCal extends TargetTranslator {
               msgDeliveredProperties = msgDeliveredProperties :+ s"(Len($queue) > 0 $and Head($queue) = $msgStr ~> cur_msg_${c.msg} = $msgStr)"
               sb.append(indent * 2 + s"goto L_${c.bodyStart};\n")
             }
-          sb.append(indent + "end either;\n")
 
           otherwise match {
             case Some(otherwiseStart) =>
@@ -242,6 +244,8 @@ class PlusCal extends TargetTranslator {
                 sb.append(indent * 2 + s"goto L_$otherwiseStart;\n")
             case None =>
           }
+          if cases.size > 1 then
+            sb.append(indent + "end either;\n")
 
         case IRSkip(_, _, _, next) =>
           sb.append(s"skip; goto L_$next;\n")
@@ -371,10 +375,8 @@ class PlusCal extends TargetTranslator {
     if (isPropEnabled("validity") && finishedProperties.nonEmpty)
       properties.append("ValidityProperty")
 
-    if (properties.nonEmpty) {
-      sb.append("PROPERTIES\n")
-      properties.foreach { p => sb.append(indent + s"$p\n") }
-    }
+    sb.append("PROPERTIES\n")
+    properties.foreach { p => sb.append(indent + s"$p\n") }
     sb.toString()
   }
 }
