@@ -52,7 +52,7 @@ class ASTVisitor(val debug: Boolean = false) {
     }
 
     // There can also be some reserved names for labels
-    // They'll be transformed into user-defined ones
+    // Some of them will be transformed into user-defined ones
     labels.foreach { (actor, actorLabels) =>
       val labelNames = actorLabels.keys.toList
 
@@ -89,6 +89,7 @@ class ASTVisitor(val debug: Boolean = false) {
         }
       }
     }
+    // And `ACTOR_FINISH` label can be used to check if specific actor finished (will be handled in a targets)
 
     if (debug) dumpIR()
   }

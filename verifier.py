@@ -252,11 +252,11 @@ def parse_spin_output(target_file, source_map, source_code):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 3:
-        print("Usage: python verifier.py <tla|spin> <model_file> <tvl source file> <line mapping file>")
+    if len(sys.argv) < 5:
+        print("Usage: python verifier.py <tla|spin> <model_file> <tvl source file> <line mapping file> <trace size>")
         sys.exit(1)
 
-    target, model_file, source_file, map_file = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
+    target, model_file, source_file, map_file, MAX_TRACE_STEPS = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])
 
     source_map = load_source_map(map_file)
     source_code = load_source_code(source_file)

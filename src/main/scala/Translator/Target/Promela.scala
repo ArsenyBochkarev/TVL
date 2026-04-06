@@ -282,7 +282,17 @@ class Promela extends TargetTranslator {
     val normalizedFormula = formula
       .replaceAll("\\bG\\b", "[]")
       .replaceAll("\\bF\\b", "<>")
-    val spinFormula = normalizedFormula.replaceAll("([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)", "$1@$2")
+    val pattern = "([a-zA-Z_0-9]+)\\.([a-zA-Z_0-9]+)".r
+    val spinFormula = pattern.replaceAllIn(normalizedFormula, m => {
+      val actor = m.group(1)
+      val label = m.group(2)
+
+      if (label == "ACTOR_FINISH") {
+        s"(${actor}_finished == true)"
+      } else {
+        s"$actor@$label"
+      }
+    })
     s"ltl $name { $spinFormula }"
   override def formatCTL(name: String, formula: String): String =
     println("Error: CTL is not supported for PlusCal target")

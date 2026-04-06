@@ -1,0 +1,343 @@
+module ReliableBroadcast
+
+actor N1 {
+    snt: send INIT to N2
+    send INIT to N3
+    send INIT to N4
+
+    choose {
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo3: repeat {
+            receive alts {
+                ECHO from N2 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N3 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N4 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+            }
+        }
+        // Two more votes (one is N1's own)
+        after_vote: repeat {
+            receive alts {
+                // ECHO from N2 => { skip }
+                // ECHO from N3 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N2 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+        wait_deliver: repeat {
+            receive alts {
+                // ECHO from N2 => { skip }
+                // ECHO from N3 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N2 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+    } or {
+        wait_vote1: repeat {
+            receive alts {
+                VOTE from N2 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+        wait_vote2: repeat {
+            receive alts {
+                // Two votes + N1 vote (actor knows its vote) -> deliver
+                VOTE from N2 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                }
+                VOTE from N3 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                }
+                VOTE from N4 => {
+                    send VOTE to N2
+                    send VOTE to N3
+                    send VOTE to N4
+                }
+            }
+        }
+    }
+    ACTOR_FINISH: skip
+}
+
+actor N2 {
+    // Regular node either receives INIT from N1 or listens for VOTEs
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N3
+        send ECHO to N4
+
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N3 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N4 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+            }
+        }
+        after_vote: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N3 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+        wait_deliver: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N3 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+    } or {
+        start_vote: repeat {
+            receive alts {
+                VOTE from N1 => { break }
+                VOTE from N3 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+        wait_vote2: repeat {
+            receive alts {
+                VOTE from N1 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                VOTE from N3 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+                VOTE from N4 => {
+                    send VOTE to N1
+                    send VOTE to N3
+                    send VOTE to N4
+                    break
+                }
+            }
+        }
+    }
+    ACTOR_FINISH: skip
+}
+
+// Analogously to N2
+actor N3 {
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N4
+
+        wait_echo1: repeat { receive alts { ECHO from N1 => { break } ECHO from N2 => { break } ECHO from N4 => { break } } }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N2 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+                ECHO from N4 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+            }
+        }
+        after_vote: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N2 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N2 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+        wait_deliver: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N2 => { skip }
+                // ECHO from N4 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N2 => { break }
+                VOTE from N4 => { break }
+            }
+        }
+    } or {
+        start_vote: repeat { receive alts { VOTE from N1 => { break } VOTE from N2 => { break } VOTE from N4 => { break } } }
+        wait_vote2: repeat {
+            receive alts {
+                VOTE from N1 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+                VOTE from N2 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+                VOTE from N4 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N4
+                    break
+                }
+            }
+        }
+    }
+    ACTOR_FINISH: skip
+}
+
+// Analogously to N2
+actor N4 {
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N3
+
+        wait_echo1: repeat { receive alts { ECHO from N1 => { break } ECHO from N2 => { break } ECHO from N3 => { break } } }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+                ECHO from N2 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+                ECHO from N3 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+            }
+        }
+        after_vote: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N2 => { skip }
+                // ECHO from N3 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N2 => { break }
+                VOTE from N3 => { break }
+            }
+        }
+        wait_deliver: repeat {
+            receive alts {
+                // ECHO from N1 => { skip }
+                // ECHO from N2 => { skip }
+                // ECHO from N3 => { skip }
+                VOTE from N1 => { break }
+                VOTE from N2 => { break }
+                VOTE from N3 => { break }
+            }
+        }
+    } or {
+        start_vote: repeat { receive alts { VOTE from N1 => { break } VOTE from N2 => { break } VOTE from N3 => { break } } }
+        wait_vote2: repeat {
+            receive alts {
+                VOTE from N1 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+                VOTE from N2 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+                VOTE from N3 => {
+                    send VOTE to N1
+                    send VOTE to N2
+                    send VOTE to N3
+                    break
+                }
+            }
+        }
+    }
+    ACTOR_FINISH: skip
+}
+
+specs {
+    // If N1 agreed on delivery then all should
+    ltl Agreement: "G (N1.ACTOR_FINISH -> F (N2.ACTOR_FINISH && N3.ACTOR_FINISH && N4.ACTOR_FINISH))";
+}

@@ -342,13 +342,17 @@ class PlusCal extends TargetTranslator {
     var tlaFormula = pattern.replaceAllIn(normalizedFormula, m => {
       val actor = m.group(1)
       val label = m.group(2)
-      val id = userLabels.get(actor).flatMap(_.get(label))
-
-      if (id.isDefined) {
-        s"""(pc["$actor"] = "L_${id.get}")"""
+      if (label == "ACTOR_FINISH") {
+        s"""(${actor}_finished = TRUE)"""
       } else {
-        println(s"[WARNING] Label $actor.$label not found! Property might fail to compile.")
-        s"""(pc["$actor"] = "$label")"""
+        val id = userLabels.get(actor).flatMap(_.get(label))
+
+        if (id.isDefined) {
+          s"""(pc["$actor"] = "L_${id.get}")"""
+        } else {
+          println(s"[WARNING] Label $actor.$label not found! Property might fail to compile.")
+          s"""(pc["$actor"] = "$label")"""
+        }
       }
     })
     tlaFormula = tlaFormula
@@ -379,11 +383,11 @@ class PlusCal extends TargetTranslator {
       properties.append("ValidityProperty")
       validityEnabled = true
 
+    if (!finishingEnabled && !validityEnabled)
+      sb.append("\nCHECK_DEADLOCK FALSE\n") // Most likely the protocol is not finishing so no reason to check deadlocks
+
     sb.append("PROPERTIES\n")
     properties.foreach { p => sb.append(indent + s"$p\n") }
-
-    if (!finishingEnabled && !validityEnabled)
-      sb.append("\nCHECK_DEADLOCK FALSE\n") // Most likely the protocol is not finishing so no reason check deadlocks
 
     sb.toString()
   }

@@ -9,6 +9,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  --props=...           (Optional) Comma-separated list of properties to generate."
   echo "                        Available: finishing, msg, validity, none, all (default)."
   echo "  --channel-size=...    (Optional) Channel size limit. Default: 20."
+  echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20."
   echo ""
   echo "Example:"
   echo "  ./translate src/model.tvl out/model.tla tla --props=finishing,validity --channel-size=10"
@@ -35,7 +36,8 @@ OUTPUT="$DIR/${BASE}.${EXT}"
 
 
 PROPS="all"
-SIZE=20
+CHANNEL_SIZE=20
+TRACE_SIZE=20
 
 shift 2
 while [[ $# -gt 0 ]]; do
@@ -44,7 +46,10 @@ while [[ $# -gt 0 ]]; do
       PROPS="${1#--props=}"
       ;;
     --channel-size=*)
-      SIZE="${1#--channel-size=}"
+      CHANNEL_SIZE="${1#--channel-size=}"
+      ;;
+    --trace-size=*)
+      TRACE_SIZE="${1#--trace-size=}"
       ;;
     *)
       echo "Unknown option: $1"
@@ -56,11 +61,11 @@ done
 
 export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
 
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS $SIZE"
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS $CHANNEL_SIZE"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1
 fi
 
 MAP_PATH="$DIR/${BASE}.map.json"
-python3 verifier.py $TARGET $OUTPUT $INPUT $MAP_PATH
+python3 verifier.py $TARGET $OUTPUT $INPUT $MAP_PATH $TRACE_SIZE
