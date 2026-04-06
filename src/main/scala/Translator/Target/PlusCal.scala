@@ -368,15 +368,23 @@ class PlusCal extends TargetTranslator {
     sb.append("SPECIFICATION Spec\n\n")
 
     val properties = mutable.ListBuffer[String]()
+    var finishingEnabled = false
     if (isPropEnabled("finishing") && finishedProperties.nonEmpty)
       properties.append("FinishingProperty")
+      finishingEnabled = true
     if (isPropEnabled("msg") && msgDeliveredProperties.nonEmpty)
       properties.append("MessageDeliveredProperty")
+    var validityEnabled = false
     if (isPropEnabled("validity") && finishedProperties.nonEmpty)
       properties.append("ValidityProperty")
+      validityEnabled = true
 
     sb.append("PROPERTIES\n")
     properties.foreach { p => sb.append(indent + s"$p\n") }
+
+    if (!finishingEnabled && !validityEnabled)
+      sb.append("\nCHECK_DEADLOCK FALSE\n") // Most likely the protocol is not finishing so no reason check deadlocks
+
     sb.toString()
   }
 }
