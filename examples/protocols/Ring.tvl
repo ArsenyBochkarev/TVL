@@ -35,8 +35,6 @@ actor R1 {
 			}
 		}
 	}
-    FIN1: skip
-    FIN: skip
 }
 
 actor R2 {
@@ -74,8 +72,6 @@ actor R2 {
 			}
 		}
 	}
-    FIN1: skip
-    FIN: skip
 }
 
 actor R3 {
@@ -113,8 +109,6 @@ actor R3 {
 			}
 		}
 	}
-    FIN1: skip
-    FIN: skip
 }
 
 actor R4 {
@@ -153,8 +147,6 @@ actor R4 {
 			}
 		}
 	}
-    FIN1: skip
-    FIN: skip
 }
 
 specs {
