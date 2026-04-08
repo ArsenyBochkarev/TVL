@@ -25,10 +25,10 @@ spec_def: SPECS '{' (formula_def | template_property_def)* '}';
 formula_def: logic_type formula_name ':' STRING ';';
 logic_type: LTL | CTL;
 formula_name: IDENTIFIER;
-// E.g. `Finishing;`
+// E.g. `FinishingProperty;`
 template_property_def: IDENTIFIER ';';
 
-block: '{' (labeled_statement)* '}';
+block: '{' (labeled_statement SEMI?)* '}';
 
 labeled_statement: label_def? statement;
 label_def: IDENTIFIER ':';
@@ -90,6 +90,7 @@ SPECS: 'specs';
 LTL: 'ltl';
 CTL: 'ctl';
 
+SEMI: ';';
 IDENTIFIER: [a-zA-Z_] [a-zA-Z0-9_]*;
 NUMBER: [0-9]+;
 STRING: '"' (~["\\] | '\\' .)* '"';
