@@ -89,7 +89,6 @@ class ASTVisitor(val debug: Boolean = false) {
         }
       }
     }
-    // And `ACTOR_FINISH` label can be used to check if specific actor finished (will be handled in a targets)
 
     if (debug) dumpIR()
   }

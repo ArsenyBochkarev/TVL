@@ -85,7 +85,6 @@ actor N1 {
             }
         }
     }
-    ACTOR_FINISH: skip
 }
 
 actor N2 {
@@ -176,7 +175,6 @@ actor N2 {
             }
         }
     }
-    ACTOR_FINISH: skip
 }
 
 // Analogously to N2
@@ -255,7 +253,6 @@ actor N3 {
             }
         }
     }
-    ACTOR_FINISH: skip
 }
 
 // Analogously to N2
@@ -334,10 +331,9 @@ actor N4 {
             }
         }
     }
-    ACTOR_FINISH: skip
 }
 
 specs {
     // If N1 agreed on delivery then all should
-    ltl Agreement: "G (N1.ACTOR_FINISH -> F (N2.ACTOR_FINISH && N3.ACTOR_FINISH && N4.ACTOR_FINISH))";
+    ltl Agreement: "G (N1.ACTOR_END -> F (N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
 }

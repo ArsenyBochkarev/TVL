@@ -287,7 +287,7 @@ class Promela extends TargetTranslator {
       val actor = m.group(1)
       val label = m.group(2)
 
-      if (label == "ACTOR_FINISH") {
+      if (label == "ACTOR_END") {
         s"(${actor}_finished == true)"
       } else {
         s"$actor@$label"
