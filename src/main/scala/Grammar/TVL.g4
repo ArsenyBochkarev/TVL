@@ -20,11 +20,13 @@ actor_def: ACTOR actor_name (INTERACTS WITH actor_list)? block;
 actor_name: IDENTIFIER;
 actor_list: IDENTIFIER (',' IDENTIFIER)*;
 
-spec_def: SPECS '{' (formula_def)* '}';
+spec_def: SPECS '{' (formula_def | template_property_def)* '}';
 // E.g. `ltl MyProp: "[] (A -> <> B)";`
 formula_def: logic_type formula_name ':' STRING ';';
 logic_type: LTL | CTL;
 formula_name: IDENTIFIER;
+// E.g. `Finishing;`
+template_property_def: IDENTIFIER ';';
 
 block: '{' (labeled_statement)* '}';
 

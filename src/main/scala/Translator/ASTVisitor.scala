@@ -17,6 +17,8 @@ class ASTVisitor(val debug: Boolean = false) {
   def getLabels: Map[String, Map[String, Int]] = labels.map(kv => kv._1 -> kv._2.toMap).toMap
   private val userSpecs = mutable.ListBuffer[UserSpec]()
   def getUserSpecs: List[UserSpec] = userSpecs.toList
+  private val templateSpecs = mutable.ListBuffer[String]()
+  def getTemplateSpecs: List[String] = templateSpecs.toList
 
   private var pcCounter = 0
   private var scheduler: (Int, Int) = (-1, -1) // We'll need it for `parallel` blocks
@@ -40,14 +42,19 @@ class ASTVisitor(val debug: Boolean = false) {
       actorProcedures(name)(endId) = IREnd(endId, actorCtx.getStop.getLine, scheduler)
     }
 
-    // User specs
     ctx.module_def().spec_def().asScala.foreach { specCtx =>
+      // User specs
       specCtx.formula_def().asScala.foreach { fCtx =>
         val logic = fCtx.logic_type().getText.toLowerCase
         val name = fCtx.formula_name().getText
         val rawFormulaStr = fCtx.STRING().getText
         val formula = rawFormulaStr.substring(1, rawFormulaStr.length - 1)
         userSpecs.append(UserSpec(logic, name, formula))
+      }
+      // Template specs
+      specCtx.template_property_def().asScala.foreach { tpCtx =>
+          val propName = tpCtx.IDENTIFIER().getText
+          templateSpecs.append(propName)
       }
     }
 

@@ -6,13 +6,11 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "Arguments:"
   echo "  <input_file>          Path to the source TVL file."
   echo "  <target>              Target model checker. Options: 'tla', 'spin'."
-  echo "  --props=...           (Optional) Comma-separated list of properties to generate."
-  echo "                        Available: finishing, msg, validity, none, all (default)."
   echo "  --channel-size=...    (Optional) Channel size limit. Default: 20."
   echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20."
   echo ""
   echo "Example:"
-  echo "  ./translate src/model.tvl out/model.tla tla --props=finishing,validity --channel-size=10"
+  echo "  ./translate src/model.tvl out/model.tla tla --channel-size=10"
   exit 0
 fi
 
@@ -35,16 +33,12 @@ BASE=$(basename "$INPUT" .tvl)
 OUTPUT="$DIR/${BASE}.${EXT}"
 
 
-PROPS="all"
 CHANNEL_SIZE=20
 TRACE_SIZE=20
 
 shift 2
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --props=*)
-      PROPS="${1#--props=}"
-      ;;
     --channel-size=*)
       CHANNEL_SIZE="${1#--channel-size=}"
       ;;
@@ -61,7 +55,7 @@ done
 
 export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
 
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $PROPS $CHANNEL_SIZE"
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1

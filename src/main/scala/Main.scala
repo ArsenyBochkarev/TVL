@@ -5,8 +5,7 @@ import Translator.Target.{TargetTranslator, *}
 
 import java.io.{File, PrintWriter}
 
-def parse(input: String, output: String, target: String, debug: Boolean,
-          enabledProps: String, channelSizeLimit: Int): Unit = {
+def parse(input: String, output: String, target: String, debug: Boolean, channelSizeLimit: Int): Unit = {
   if !targetIsValid(target) then
     println(s"Error: Invalid target \"$target\". Use \"tla\" or \"spin\"")
     System.exit(1)
@@ -26,7 +25,7 @@ def parse(input: String, output: String, target: String, debug: Boolean,
   }
 
   translator.setOutputFile(output)
-  translator.setEnabledProperties(enabledProps)
+  translator.setEnabledProperties(visitor.getTemplateSpecs)
   translator.setUserLabels(visitor.getLabels)
   translator.setChannelSizeLimit(channelSizeLimit)
 
@@ -49,7 +48,7 @@ def parse(input: String, output: String, target: String, debug: Boolean,
 }
 
 @main
-def main(filePath: String, outputFile: String, target: String, enabledProps: String, channelSizeLimit: Int): Unit = {
-  parse(filePath, outputFile, target, /*debug=*/false, enabledProps, channelSizeLimit)
+def main(filePath: String, outputFile: String, target: String, channelSizeLimit: Int): Unit = {
+  parse(filePath, outputFile, target, /*debug=*/false, channelSizeLimit)
   System.exit(0)
 }

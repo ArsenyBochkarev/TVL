@@ -13,14 +13,14 @@ class PlusCal extends TargetTranslator {
 
   private var finishedProperties: List[String] = List.empty[String]
   override def getFinishingProperty: String =
-    if (!isPropEnabled("finishing") || finishedProperties.isEmpty) ""
+    if (!isPropEnabled("FinishingProperty") || finishedProperties.isEmpty) ""
     else s"FinishingProperty == <>(${finishedProperties.mkString(s"\n$and ")})"
   private var msgDeliveredProperties: List[String] = List.empty[String]
   override def getMsgDeliveredProperty: String =
-    if (!isPropEnabled("msg") || msgDeliveredProperties.isEmpty) ""
+    if (!isPropEnabled("MsgDeliveredProperty") || msgDeliveredProperties.isEmpty) ""
     else "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
   override def getValidityProperty: String =
-    if (!isPropEnabled("validity") || finishedProperties.isEmpty) ""
+    if (!isPropEnabled("ValidityProperty") || finishedProperties.isEmpty) ""
     else
       val sb = new StringBuilder()
       sb.append(s"ValidityProperty == []((${finishedProperties.mkString(s"\n$and ")}) => (")

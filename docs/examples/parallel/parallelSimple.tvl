@@ -24,3 +24,7 @@ actor R3 {
 actor R4 {
     receive Z from R3
 }
+
+specs {
+    AllTemplateProperties;
+}

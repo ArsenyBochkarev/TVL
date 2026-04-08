@@ -13,15 +13,15 @@ class Promela extends TargetTranslator {
 
   private var finishedProperties: List[String] = List.empty[String]
   override def getFinishingProperty: String =
-    if (!isPropEnabled("finishing") || finishedProperties.isEmpty) ""
+    if (!isPropEnabled("FinishingProperty") || finishedProperties.isEmpty) ""
     else "ltl FinishingProperty { <>(" + finishedProperties.mkString(s" && ") + ") }"
   private var msgDeliveredProperties: List[String] = List.empty[String]
   override def getMsgDeliveredProperty: String =
-    if (!isPropEnabled("msg") || msgDeliveredProperties.isEmpty) ""
+    if (!isPropEnabled("MsgDeliveredProperty") || msgDeliveredProperties.isEmpty) ""
     else "ltl MessageDeliveredProperty { " + msgDeliveredProperties.mkString(s" && ") + " }"
   private var channels: List[String] = List.empty[String]
   override def getValidityProperty: String =
-    if (!isPropEnabled("validity") || finishedProperties.isEmpty || channels.isEmpty) ""
+    if (!isPropEnabled("ValidityProperty") || finishedProperties.isEmpty || channels.isEmpty) ""
     else
       val sb = new StringBuilder()
       sb.append(s"ltl ValidityProperty { [](${finishedProperties.mkString(s" && ")} -> (")
