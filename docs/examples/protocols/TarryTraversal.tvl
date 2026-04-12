@@ -1,0 +1,191 @@
+module TarryTraversal
+
+/*
+Diamond-like structure:
+   B
+  / \
+ /   \
+A-----C
+ \   /
+  \ /
+   D
+*/
+
+// Initiator
+actor A {
+    choose {
+        // First is B
+        send TOK to B
+        receive TOK from B
+        // Every graph edge should be traversed twice
+        choose {
+            // Next is C
+            send TOK to C
+            receive TOK from C
+
+            // Last one is D
+            send TOK to D
+            receive TOK from D
+            decide: skip
+        } or {
+            // Next is D
+            send TOK to D
+            receive TOK from D
+            // Last one is C
+            send TOK to C
+            receive TOK from C
+            decide: skip
+        }
+    } or {
+        // First is C
+        send TOK to C
+        receive TOK from C
+        choose {
+            // Next is B
+            send TOK to B
+            receive TOK from B
+            // Last one is D
+            send TOK to D
+            receive TOK from D
+            decide: skip
+        } or {
+            // Next is D
+            send TOK to D
+            receive TOK from D
+            // Last one is B
+            send TOK to B
+            receive TOK from B
+            decide: skip
+        }
+    } or {
+        // First is D
+        send TOK to D
+        receive TOK from D
+        choose {
+            // Next is B
+            send TOK to B
+            receive TOK from B
+            // Last one is C
+            send TOK to C
+            receive TOK from C
+            decide: skip
+        } or {
+            // Next is C
+            send TOK to C
+            receive TOK from C
+            // Last one is B
+            send TOK to B
+            receive TOK from B
+            decide: skip
+        }
+    }
+}
+
+actor B {
+    receive alts {
+        TOK from A => {
+            // Receiving from A => parent is A
+            send TOK to C
+            receive TOK from C
+            // Back to A
+            send TOK to A
+        }
+        TOK from C => {
+            // Receiving from C => parent is C
+            send TOK to A
+            receive TOK from A
+            // Back to C
+            send TOK to C
+        }
+    }
+}
+
+// Analogously to B
+actor D {
+    receive alts {
+        TOK from A => {
+            send TOK to C
+            receive TOK from C
+            send TOK to A
+        }
+        TOK from C => {
+            send TOK to A
+            receive TOK from A
+            send TOK to C
+        }
+    }
+}
+
+actor C {
+    receive alts {
+        TOK from A => {
+            choose {
+                // B first
+                send TOK to B
+                receive TOK from B
+                // D last
+                send TOK to D
+                receive TOK from D
+                send TOK to A
+            } or {
+                // D first
+                send TOK to D
+                receive TOK from D
+                // B last
+                send TOK to B
+                receive TOK from B
+                // Return back
+                send TOK to A
+            }
+        }
+        TOK from B => {
+            choose {
+                // A first
+                send TOK to A
+                receive TOK from A
+                // D last
+                send TOK to D
+                receive TOK from D
+                // Return back
+                send TOK to B
+            } or {
+                // D first
+                send TOK to D
+                receive TOK from D
+                // A last
+                send TOK to A
+                receive TOK from A
+                // Return back
+                send TOK to B
+            }
+        }
+        TOK from D => {
+            choose {
+                // A first
+                send TOK to A
+                receive TOK from A
+                // B last
+                send TOK to B
+                receive TOK from B
+                // Return back
+                send TOK to D
+                done: skip
+            } or {
+                // B first
+                send TOK to B
+                receive TOK from B
+                // A last
+                send TOK to A
+                receive TOK from A
+                // Return back
+                send TOK to D
+            }
+        }
+    }
+}
+
+specs {
+    AllTemplateProperty;
+    // Initiator ends only after all other actors ended
+    ltl Correctness: "A.ACTOR_END -> (B.ACTOR_END && C.ACTOR_END && D.ACTOR_END)";
+}
