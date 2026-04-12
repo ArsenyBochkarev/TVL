@@ -1,0 +1,40 @@
+module TreeWave
+
+/*
+Tree structure:
+   B
+  / \
+ A   C
+*/
+
+// Possible initiator
+actor A {
+    send TOK to B
+    receive TOK from B
+}
+
+// Possible initiator
+actor C {
+    send TOK to B
+    receive TOK from B
+}
+
+// Controller
+actor B {
+    receive alts {
+        TOK from A => {
+            receive TOK from C
+            send TOK to A
+            send TOK to C
+        }
+        TOK from C => {
+            receive TOK from A
+            send TOK to C
+            send TOK to A
+        }
+    }
+}
+
+specs {
+    AllTemplateProperties;
+}
