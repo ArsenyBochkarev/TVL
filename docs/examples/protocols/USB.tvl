@@ -1,0 +1,42 @@
+module DBus_USB_Notification
+
+actor UDev {
+    repeat {
+        choose {
+            detected: send DeviceAdded to Automount
+        } or {
+            skip
+        }
+    }
+}
+
+actor Automount {
+    repeat {
+        receive alts {
+            DeviceAdded from UDev => {
+                choose {
+                    mount_ok: skip
+                    send DeviceMounted to FileManager
+                } or {
+                    ignore: skip
+                }
+            }
+        }
+    }
+}
+
+actor FileManager {
+    repeat {
+        receive alts {
+            DeviceMounted from Automount => {
+                gui_notify: skip
+            }
+        }
+    }
+}
+
+specs {
+    ltl NotifyAfterMount: "[] (Automount.mount_ok -> <> FileManager.gui_notify)";
+    // For SPIN it is also possible to check following property:
+    // ltl NoPhantomNotifications: "!FileManager.gui_notify W UDev.detected";
+}
