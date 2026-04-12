@@ -329,6 +329,13 @@ class PlusCal extends TargetTranslator {
     // For PlusCal target we also need to store formula's name to generate .cfg file
     userSpecs = name :: userSpecs
 
+    val unsupportedPattern = "\\b([UW])\\b".r
+    unsupportedPattern.findFirstIn(formula) match {
+      case Some(op) =>
+        println(s"[WARNING] Unsupported LTL operator '$op' found in property '$name'. TLA+ does not natively support Until (U) or Weak Until (W). Property might fail to compile.")
+      case None =>
+    }
+
     // Normalize 'G' and 'F', if any
     val normalizedFormula = formula
       .replaceAll("\\bG\\b", "[]")
