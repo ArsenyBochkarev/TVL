@@ -101,5 +101,5 @@ actor PayProcessor {
 }
 
 specs {
-    MsgDelivered;
+    MsgDeliveredProperty;
 }
