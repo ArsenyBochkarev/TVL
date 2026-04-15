@@ -19,6 +19,8 @@ class ASTVisitor(val debug: Boolean = false) {
   def getUserSpecs: List[UserSpec] = userSpecs.toList
   private val templateSpecs = mutable.ListBuffer[String]()
   def getTemplateSpecs: List[String] = templateSpecs.toList
+  private val labelBasedTemplateSpecs = mutable.ListBuffer[String]()
+  def getLabelBasedTemplateSpecs: List[String] = labelBasedTemplateSpecs.toList
 
   private var pcCounter = 0
   private var scheduler: (Int, Int) = (-1, -1) // We'll need it for `parallel` blocks
@@ -60,14 +62,17 @@ class ASTVisitor(val debug: Boolean = false) {
 
     // There can also be some reserved names for labels
     // Some of them will be transformed into user-defined ones
+    var lossDetectionPropertySet = false
+    val lossDetectionPropertyEnabled = templateSpecs.contains("LossDetectionProperty")
     labels.foreach { (actor, actorLabels) =>
       val labelNames = actorLabels.keys.toList
 
       // Recovery property: [] (fail_i -> <> start_i)
-      val failLabels = labelNames.filter(_.toLowerCase.startsWith("fail"))
-      val startLabels = labelNames.filter(_.toLowerCase.startsWith("start"))
+      val recoveryPropertyEnabled = templateSpecs.contains("RecoveryProperty")
+      val failLabels = labelNames.filter(_.toLowerCase.startsWith("fail_"))
+      val startLabels = labelNames.filter(_.toLowerCase.startsWith("start_"))
 
-      if (failLabels.nonEmpty && startLabels.nonEmpty) {
+      if (failLabels.nonEmpty && startLabels.nonEmpty && recoveryPropertyEnabled) {
         var recovNum = 0
         failLabels.foreach { fail =>
           startLabels.foreach { start =>
@@ -76,6 +81,10 @@ class ASTVisitor(val debug: Boolean = false) {
             recovNum += 1
           }
         }
+      } else if (recoveryPropertyEnabled) {
+        println(s"[WARNING] Recovery property enabled but no reserved `fail_*` and `start_*` labels found. Skipping.")
+      } else if (failLabels.nonEmpty && startLabels.nonEmpty) {
+        println(s"[WARNING] Recovery property disabled but reserved `fail_*` and `start_*` labels found.")
       }
 
       // Loss Detection: [] (expired_msg => <> msg_loss_detected)
@@ -89,13 +98,19 @@ class ASTVisitor(val debug: Boolean = false) {
             val otherActorLabelNames = otherActorLabels.keys.toList
             val lossDetectLabels = otherActorLabelNames.filter(_.endsWith("_loss_detected"))
             lossDetectLabels.filter(_.equals(s"${msgName}_loss_detected")).foreach { ldLabel =>
-              val formula = s"[] ($actor.$expLabel -> <>($otherActor.$ldLabel))"
-              userSpecs.append(UserSpec("ltl", s"LossDetection_${actor}_${expLabel}_$lossDetectNum", formula))
-              lossDetectNum += 1
+              if (lossDetectionPropertyEnabled)
+                val formula = s"[] ($actor.$expLabel -> <>($otherActor.$ldLabel))"
+                userSpecs.append(UserSpec("ltl", s"LossDetection_${actor}_${expLabel}_$lossDetectNum", formula))
+                lossDetectNum += 1
+                lossDetectionPropertySet = true
+              else
+                println(s"[WARNING] Loss detection property disabled but reserved `expired_msg_*` and `*_loss_detected` labels found.")
             }
         }
       }
     }
+    if !lossDetectionPropertySet && lossDetectionPropertyEnabled then
+      println(s"[WARNING] Loss detection property enabled but no reserved `expired_msg_*` and `*_loss_detected` labels found. Skipping.")
 
     if (debug) dumpIR()
   }

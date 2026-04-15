@@ -23,13 +23,13 @@ trait TargetTranslator:
   private val sourceMapper: SourceMapper = SourceMapper()
   def getMapper: SourceMapper = sourceMapper
 
-  private val allProperties: Set[String] = Set("AllTemplateProperties", "FinishingProperty", "MsgDeliveredProperty", "ValidityProperty")
+  private val allProperties: Set[String] = Set("AllTemplateProperties", "FinishingProperty", "MsgDeliveredProperty", "ValidityProperty", "RecoveryProperty", "LossDetectionProperty")
   private var enabledProperties: Set[String] = Set("AllTemplateProperties")
   def setEnabledProperties(props: List[String]): Unit = {
     enabledProperties = props.toSet
     for (x <- enabledProperties)
       if (!allProperties.contains(x))
-        println(s"Error: erroneous name for generating property. Possible values: " + allProperties.toString())
+        println(s"Error: erroneous name for generating template property. Possible values: " + allProperties.toString())
         System.exit(1)
   }
   def isPropEnabled(prop: String): Boolean = {
@@ -41,7 +41,15 @@ trait TargetTranslator:
     userLabels = l
   }
 
+  def generateTemplateSpecs: String = {
+    val sb = new StringBuilder()
+    sb.append(getFinishingProperty)
+    sb.append(getMsgDeliveredProperty)
+    sb.append(getValidityProperty)
+    sb.toString()
+  }
   def logicIsSupported(logic: String): Boolean
+  // This includes both fully user-defined specs and enabled label-based template specs
   def generateUserSpecs(specs: List[UserSpec], targetName: String): String = {
     val sb = new StringBuilder()
     specs.foreach { spec =>

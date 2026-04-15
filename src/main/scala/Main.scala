@@ -35,9 +35,7 @@ def parse(input: String, output: String, target: String, debug: Boolean, channel
     writer.println(code)
 
     // Properties
-    writer.println(translator.getFinishingProperty)
-    writer.println(translator.getMsgDeliveredProperty)
-    writer.println(translator.getValidityProperty)
+    writer.println(translator.generateTemplateSpecs)
     writer.println(translator.generateUserSpecs(visitor.getUserSpecs, target))
 
     // Mapping for trace

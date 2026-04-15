@@ -1,7 +1,7 @@
 module Test
 
 actor Sender {
-    repeat {
+    repeat 10 {
         choose {
             send Data to Receiver
         } or {
@@ -23,4 +23,8 @@ actor Receiver {
             }
         }
     }
+}
+
+specs {
+    LossDetectionProperty;
 }

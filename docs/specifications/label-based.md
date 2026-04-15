@@ -16,7 +16,7 @@ Here, labels with reserved names are `fail_crash` and `start_recovery` (actually
 TVL translator will internally generate some properties based on these labels.
 
 ##### Recovery property
-Labels names: **`fail*`** and **`start*`**.
+Labels names: **`fail*`** and **`start*`**. Exact name to use in `specs` block: **`RecoveryProperty`**.
 
 Recovering from some error. It can be used to check jump to the "otherwise" branch if acknowledge message has not arrived.
 Mostly relevant for infinite protocols.
@@ -24,7 +24,7 @@ Mostly relevant for infinite protocols.
 Temporal formula: `G(fail_i -> F start_i)`.
 
 ##### Loss detection property
-Labels names: **`expired_msg_*`** and **`*_loss_detected`**.
+Labels names: **`expired_msg_*`** and **`*_loss_detected`**. Exact name to use in `specs` block: **`LossDetectionProperty`**.
 
 Check if protocol supports detection of message loss. Message name will be remembered and used for formula generation.
 It may seem similar to `RecoveryProperty`, but labels in this property should be on a different actors. 
