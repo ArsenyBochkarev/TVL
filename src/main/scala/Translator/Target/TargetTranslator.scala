@@ -1,7 +1,7 @@
 package Translator.Target
 
+import Translator.Frontend.UserSpec
 import Translator.IR.{IRInstruction, IRJumpGuard, IRParallelExec, IRQueuePush}
-import Translator.UserSpec
 import Translator.Mapping.SourceMapper
 
 import scala.collection.mutable

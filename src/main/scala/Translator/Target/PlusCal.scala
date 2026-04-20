@@ -1,7 +1,7 @@
 package Translator.Target
 
+import Translator.Frontend.UserSpec
 import Translator.IR.*
-import Translator.UserSpec
 
 import scala.collection.mutable
 import java.nio.file.Paths

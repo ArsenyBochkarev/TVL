@@ -11,5 +11,6 @@ lazy val root = (project in file("."))
 
 libraryDependencies ++= Seq(
   "org.antlr" % "antlr4" % "4.13.2",
-  "org.antlr" % "antlr4-runtime" % "4.13.2"
+  "org.antlr" % "antlr4-runtime" % "4.13.2",
+  "org.scalatest" %% "scalatest" % "3.2.17" % Test
 )

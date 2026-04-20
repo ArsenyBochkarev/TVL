@@ -3,12 +3,10 @@ package Translator.Frontend
 import Grammar.TVLParser.*
 import Translator.IR.*
 import Translator.IR.Lib.QueueCondition
-import Translator.UserSpec
+import Translator.Frontend.UserSpec
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters.*
-
-case class UserSpec(logic: String, name: String, formula: String)
 
 class ASTVisitor(val debug: Boolean = false) {
   // actor name -> (label name -> instruction id)
@@ -20,8 +18,6 @@ class ASTVisitor(val debug: Boolean = false) {
   def getUserSpecs: List[UserSpec] = userSpecs.toList
   private val templateSpecs = mutable.ListBuffer[String]()
   def getTemplateSpecs: List[String] = templateSpecs.toList
-  private val labelBasedTemplateSpecs = mutable.ListBuffer[String]()
-  def getLabelBasedTemplateSpecs: List[String] = labelBasedTemplateSpecs.toList
 
   private var pcCounter = 0
   private var scheduler: (Int, Int) = (-1, -1) // We'll need it for `parallel` blocks
