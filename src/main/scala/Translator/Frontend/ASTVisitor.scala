@@ -1,11 +1,12 @@
-package Translator
+package Translator.Frontend
 
 import Grammar.TVLParser.*
 import Translator.IR.*
 import Translator.IR.Lib.QueueCondition
+import Translator.UserSpec
 
-import scala.jdk.CollectionConverters.*
 import scala.collection.mutable
+import scala.jdk.CollectionConverters.*
 
 case class UserSpec(logic: String, name: String, formula: String)
 
