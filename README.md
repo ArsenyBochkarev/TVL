@@ -26,7 +26,7 @@ sbt compile
 
 ### Usage
 ```
-translate <input file> <output file> <target>
+translate <input file> <target>
 ```
 
 ### Supported targets
