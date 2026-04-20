@@ -1,0 +1,5 @@
+-J--enable-native-access=ALL-UNNAMED
+-J--add-opens=java.base/java.lang=ALL-UNNAMED
+-J-XX:+IgnoreUnrecognizedVMOptions
+-J-XX:-PrintWarnings
+-J--sun-misc-unsafe-memory-access=allow
