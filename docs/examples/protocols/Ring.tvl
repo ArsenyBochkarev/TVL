@@ -5,33 +5,21 @@ actor R1 {
 		snt: send L1 to R2
 		repeat {
 			receive alts {
-				L1 from R4 => {
-					me: send Stop to R2
-					break
-				}
+				L1 from R4 => { me: send Stop to R2; break }
 				L2 from R4 => { send L2 to R2 }
 				L3 from R4 => { send L3 to R2 }
 				L4 from R4 => { send L4 to R2 }
-				Stop from R4 => { 
-					send Stop to R2
-					nme: break 
-				}
+				Stop from R4 => { send Stop to R2; nme: break }
 			}
 		}
 	} or {
 		repeat {
 			receive alts {
-				L1 from R4 => {
-					me: send Stop to R2
-					break
-				}
+				L1 from R4 => { me: send Stop to R2; break }
 				L2 from R4 => { send L2 to R2 }
 				L3 from R4 => { send L3 to R2 }
 				L4 from R4 => { send L4 to R2 }
-				Stop from R4 => { 
-					send Stop to R2
-					nme: break 
-				}
+				Stop from R4 => { send Stop to R2; nme: break }
 			}
 		}
 	}
@@ -43,32 +31,20 @@ actor R2 {
 		repeat {
 			receive alts {
 				L1 from R1 => { skip } // Smaller ID is ignored
-				L2 from R1 => {
-					me: send Stop to R3
-					break
-				}
+				L2 from R1 => { me: send Stop to R3; break }
 				L3 from R1 => { send L3 to R3 }
 				L4 from R1 => { send L4 to R3 }
-				Stop from R1 => { 
-					send Stop to R3
-					nme: break 
-				}
+				Stop from R1 => { send Stop to R3; nme: break }
 			}
 		}
 	} or {
 		repeat {
 			receive alts {
 				L1 from R1 => { send L1 to R3 }
-				L2 from R1 => {
-					me: send Stop to R3
-					break
-				}
+				L2 from R1 => { me: send Stop to R3; break }
 				L3 from R1 => { send L3 to R3 }
 				L4 from R1 => { send L4 to R3 }
-				Stop from R1 => { 
-					send Stop to R3
-					nme: break 
-				}
+				Stop from R1 => { send Stop to R3; nme: break }
 			}
 		}
 	}
@@ -81,15 +57,9 @@ actor R3 {
 			receive alts {
 				L1 from R2 => { skip }
 				L2 from R2 => { skip }
-				L3 from R2 => {
-					me: send Stop to R4
-					break
-				}
+				L3 from R2 => { me: send Stop to R4; break }
 				L4 from R2 => { send L4 to R4 }
-				Stop from R2 => { 
-					send Stop to R4
-					nme: break 
-				}
+				Stop from R2 => { send Stop to R4; nme: break }
 			}
 		}
 	} or {
@@ -97,15 +67,9 @@ actor R3 {
 			receive alts {
 				L1 from R2 => { send L1 to R4 }
 				L2 from R2 => { send L2 to R4 }
-				L3 from R2 => {
-					me: send Stop to R4
-					break
-				}
+				L3 from R2 => { me: send Stop to R4; break }
 				L4 from R2 => { send L4 to R4 }
-				Stop from R2 => { 
-					send Stop to R4
-					nme: break 
-				}
+				Stop from R2 => { send Stop to R4; nme: break }
 			}
 		}
 	}
@@ -120,14 +84,8 @@ actor R4 {
 				L1 from R3 => { skip }
 				L2 from R3 => { skip }
 				L3 from R3 => { skip }
-				L4 from R3 => {
-					me: send Stop to R1
-					break
-				}
-				Stop from R3 => { 
-					send Stop to R1
-					nme: break 
-				}
+				L4 from R3 => { me: send Stop to R1; break }
+				Stop from R3 => { send Stop to R1; nme: break }
 			}
 		}
 	} or {
@@ -136,14 +94,8 @@ actor R4 {
 				L1 from R3 => { send L1 to R1 }
 				L2 from R3 => { send L2 to R1 }
 				L3 from R3 => { send L3 to R1 }
-				L4 from R3 => {
-					me: send Stop to R1
-					break
-				}
-				Stop from R3 => { 
-					send Stop to R1
-					nme: break 
-				}
+				L4 from R3 => { me: send Stop to R1; break }
+				Stop from R3 => { send Stop to R1; nme: break }
 			}
 		}
 	}
