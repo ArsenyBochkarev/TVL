@@ -28,7 +28,13 @@ sbt compile
 ```
 translate <input file> <target>
 ```
+Altough it is highly recommended to use [VS Code plugin](https://github.com/ArsenyBochkarev/tvl-vscode).
 
 ### Supported targets
 - TLA+ (initial translation made to PlusCal)
 - SPIN
+
+### Run tests
+```
+sbt test
+```
