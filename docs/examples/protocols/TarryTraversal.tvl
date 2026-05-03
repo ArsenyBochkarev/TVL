@@ -185,7 +185,8 @@ actor C {
 }
 
 specs {
-    AllTemplateProperties;
+    MsgDeliveredProperty;
+    ValidityProperty;
     // Initiator ends only after all other actors ended
     ltl Correctness: "A.ACTOR_END -> (B.ACTOR_END && C.ACTOR_END && D.ACTOR_END)";
 }
