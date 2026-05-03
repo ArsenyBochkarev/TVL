@@ -1,0 +1,165 @@
+module ReliableBroadcast
+
+actor N1 {
+    // N1 initiates
+    send INIT to N2
+    send INIT to N3
+    send INIT to N4
+
+    send ECHO to N2
+    send ECHO to N3
+    send ECHO to N4
+
+    // Wait for 2 ECHO's from other nodes (its own already included)
+    wait_echo1: repeat {
+        receive alts {
+            ECHO from N2 => { break }
+            ECHO from N3 => { break }
+            ECHO from N4 => { break }
+        }
+    }
+    wait_echo2: repeat {
+        receive alts {
+            ECHO from N2 => { break }
+            ECHO from N3 => { break }
+            ECHO from N4 => { break }
+        }
+    }
+}
+
+actor N2 {
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N3
+        send ECHO to N4
+
+        // Wait for 2 ECHO's from other nodes (its own already included)
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+    } or {
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+
+        send ECHO to N1
+        send ECHO to N3
+        send ECHO to N4
+    }
+}
+
+// Analogously to N2
+actor N3 {
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N4
+
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+    } or {
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N4
+    }
+}
+
+// Analogously to N2
+actor N4 {
+    choose {
+        start_echo: receive INIT from N1
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N3
+
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+            }
+        }
+    } or {
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+            }
+        }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N1 => { break }
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+            }
+        }
+
+        send ECHO to N1
+        send ECHO to N2
+        send ECHO to N3
+    }
+}
+
+specs {
+    // If N1 agreed on delivery then all should
+    ltl Agreement: "G (N1.ACTOR_END -> F (N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
+}

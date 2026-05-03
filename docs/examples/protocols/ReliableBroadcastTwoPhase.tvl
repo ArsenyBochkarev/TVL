@@ -38,9 +38,6 @@ actor N1 {
         // Two more votes (one is N1's own)
         after_vote: repeat {
             receive alts {
-                // ECHO from N2 => { skip }
-                // ECHO from N3 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N2 => { break }
                 VOTE from N3 => { break }
                 VOTE from N4 => { break }
@@ -48,9 +45,6 @@ actor N1 {
         }
         wait_deliver: repeat {
             receive alts {
-                // ECHO from N2 => { skip }
-                // ECHO from N3 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N2 => { break }
                 VOTE from N3 => { break }
                 VOTE from N4 => { break }
@@ -126,9 +120,6 @@ actor N2 {
         }
         after_vote: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N3 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N3 => { break }
                 VOTE from N4 => { break }
@@ -136,9 +127,6 @@ actor N2 {
         }
         wait_deliver: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N3 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N3 => { break }
                 VOTE from N4 => { break }
@@ -210,9 +198,6 @@ actor N3 {
         }
         after_vote: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N2 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N2 => { break }
                 VOTE from N4 => { break }
@@ -220,9 +205,6 @@ actor N3 {
         }
         wait_deliver: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N2 => { skip }
-                // ECHO from N4 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N2 => { break }
                 VOTE from N4 => { break }
@@ -288,9 +270,6 @@ actor N4 {
         }
         after_vote: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N2 => { skip }
-                // ECHO from N3 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N2 => { break }
                 VOTE from N3 => { break }
@@ -298,9 +277,6 @@ actor N4 {
         }
         wait_deliver: repeat {
             receive alts {
-                // ECHO from N1 => { skip }
-                // ECHO from N2 => { skip }
-                // ECHO from N3 => { skip }
                 VOTE from N1 => { break }
                 VOTE from N2 => { break }
                 VOTE from N3 => { break }
