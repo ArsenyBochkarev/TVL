@@ -89,7 +89,7 @@ __tlacache__
 *.bin
 *.out
 *.tlc
-
+**/states/
 
 ### TVL mappings ###
 *.map.json
