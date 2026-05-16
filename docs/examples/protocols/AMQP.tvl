@@ -9,7 +9,7 @@ actor Client1 {
 				send Thanks to Gateway
 				break
 			}
-			Lost from Broker      => { send PayReq to Gateway }
+			Lost from Broker      => { recovery_loss_detected: send PayReq to Gateway }
 			Ack from Broker       => { skip }
 		}	
 	}
@@ -79,7 +79,7 @@ actor PayProcessor {
 		receive alts {
 			Client1_PayReq from Broker => {
 				choose {
-					send Client1_Lost to Broker
+					expired_msg_recovery: send Client1_Lost to Broker
 				} or {
 					send Client1_TryAgain to Broker
 				} or {
@@ -102,4 +102,5 @@ actor PayProcessor {
 
 specs {
     MsgDeliveredProperty;
+    LossDetectionProperty;
 }
