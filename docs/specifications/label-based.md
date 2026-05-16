@@ -16,7 +16,7 @@ Here, labels with reserved names are `fail_crash` and `start_recovery` (actually
 TVL translator will internally generate some properties based on these labels.
 
 ##### Recovery property
-Labels names: **`fail*`** and **`start*`**. Exact name to use in `specs` block: **`RecoveryProperty`**.
+Labels names: **`fail_*`** and **`start_*`**. Exact name to use in `specs` block: **`RecoveryProperty`**.
 
 Recovering from some error. It can be used to check jump to the "otherwise" branch if acknowledge message has not arrived.
 Mostly relevant for infinite protocols.
