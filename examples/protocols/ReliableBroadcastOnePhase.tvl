@@ -1,28 +1,46 @@
 module ReliableBroadcast
 
 actor N1 {
-    // N1 initiates
-    send INIT to N2
-    send INIT to N3
-    send INIT to N4
+    choose {
+        // N1 initiates
+        snt: send INIT to N2
+        send INIT to N3
+        send INIT to N4
 
-    send ECHO to N2
-    send ECHO to N3
-    send ECHO to N4
+        send ECHO to N2
+        send ECHO to N3
+        send ECHO to N4
 
-    // Wait for 2 ECHO's from other nodes (its own already included)
-    wait_echo1: repeat {
-        receive alts {
-            ECHO from N2 => { break }
-            ECHO from N3 => { break }
-            ECHO from N4 => { break }
+        // Wait for 2 ECHO's from other nodes (its own already included)
+        wait_echo1: repeat {
+            receive alts {
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
         }
-    }
-    wait_echo2: repeat {
-        receive alts {
-            ECHO from N2 => { break }
-            ECHO from N3 => { break }
-            ECHO from N4 => { break }
+        wait_echo2: repeat {
+            receive alts {
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+    } or {
+        // N1 does not initiate and acts like a regular node
+        n_init: repeat {
+            receive alts {
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
+        }
+        repeat {
+            receive alts {
+                ECHO from N2 => { break }
+                ECHO from N3 => { break }
+                ECHO from N4 => { break }
+            }
         }
     }
 }
@@ -167,5 +185,6 @@ actor N4 {
 
 specs {
     ltl Relay: "G ((N1.ACTOR_END || N2.ACTOR_END || N3.ACTOR_END || N4.ACTOR_END) -> F (N1.ACTOR_END && N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
-    ltl Correctness: "F (N1.ACTOR_END && N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END)";
+    ltl Correctness: "G (N1.snt -> F (N1.ACTOR_END && N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
+    ltl Unforgeability: "G (N1.n_init -> G !(N1.ACTOR_END || N2.ACTOR_END || N3.ACTOR_END || N4.ACTOR_END))";
 }
