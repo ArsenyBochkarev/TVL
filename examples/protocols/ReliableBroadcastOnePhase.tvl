@@ -52,6 +52,7 @@ actor N2 {
     } or {
         wait_echo1: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N3 => { break }
                 ECHO from N4 => { break }
@@ -59,6 +60,7 @@ actor N2 {
         }
         wait_echo2: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N3 => { break }
                 ECHO from N4 => { break }
@@ -96,6 +98,7 @@ actor N3 {
     } or {
         wait_echo1: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N2 => { break }
                 ECHO from N4 => { break }
@@ -103,6 +106,7 @@ actor N3 {
         }
         wait_echo2: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N2 => { break }
                 ECHO from N4 => { break }
@@ -140,6 +144,7 @@ actor N4 {
     } or {
         wait_echo1: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N2 => { break }
                 ECHO from N3 => { break }
@@ -147,6 +152,7 @@ actor N4 {
         }
         wait_echo2: repeat {
             receive alts {
+                INIT from N1 => { break }
                 ECHO from N1 => { break }
                 ECHO from N2 => { break }
                 ECHO from N3 => { break }
@@ -160,6 +166,6 @@ actor N4 {
 }
 
 specs {
-    // If N1 agreed on delivery then all should
-    ltl Agreement: "G (N1.ACTOR_END -> F (N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
+    ltl Relay: "G ((N1.ACTOR_END || N2.ACTOR_END || N3.ACTOR_END || N4.ACTOR_END) -> F (N1.ACTOR_END && N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))";
+    ltl Correctness: "F (N1.ACTOR_END && N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END)";
 }
