@@ -27,9 +27,9 @@ actor R1 {
             One4 from R4 => {
                 send Two4 to R2
                 receive alts {
-                    Two1 from R4 => { send One4 to R2 }
-                    Two2 from R4 => { send One4 to R2 }
-                    Two3 from R4 => { send One4 to R2 }
+                    Two1 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
+                    Two2 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
+                    Two3 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
                     Two4 from R4 => { break }
                 }
             }
@@ -85,9 +85,9 @@ actor R2 {
             One4 from R1 => {
                 send Two4 to R3
                 receive alts {
-                    Two1 from R1 => { send One4 to R3 }
-                    Two2 from R1 => { send One4 to R3 }
-                    Two3 from R1 => { send One4 to R3 }
+                    Two1 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
+                    Two2 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
+                    Two3 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
                     Two4 from R1 => { break }
                 }
             }
@@ -143,9 +143,9 @@ actor R3 {
             One4 from R2 => {
                 send Two4 to R4
                 receive alts {
-                    Two1 from R2 => { send One4 to R4 }
-                    Two2 from R2 => { send One4 to R4 }
-                    Two3 from R2 => { send One4 to R4 }
+                    Two1 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
+                    Two2 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
+                    Two3 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
                     Two4 from R2 => { break }
                 }
             }
@@ -235,4 +235,7 @@ actor R4 {
 
 specs {
     ltl SingleLeader: "G ((R1.me -> (!R2.me && !R3.me && !R4.me)) && (R2.me -> (!R1.me && !R3.me && !R4.me)) && (R3.me -> (!R1.me && !R2.me && !R4.me)) && (R4.me -> (!R1.me && !R2.me && !R3.me)))";
+    ltl LeaderElected: "F (R1.me || R2.me || R3.me || R4.me)";
+    ltl MaxIdIsLeader: "F R4.me";
+    ltl ProtocolFinishes: "F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END && R4.ACTOR_END)";
 }
