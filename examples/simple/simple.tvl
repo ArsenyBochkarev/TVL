@@ -1,0 +1,31 @@
+module Test
+
+actor R1 {
+    send Y to R3
+    send X to R2
+}
+
+actor R2 {
+    receive X from R1
+    choose {
+        fail_send: skip
+        start_send: send X to R3
+    } or {
+        send X to R3
+    }
+}
+
+actor R3 {
+    repeat {
+        receive alts {
+            X from R2 => { break }
+            Y from R1 => { skip }
+        }
+    }
+}
+
+specs {
+    FinishingProperty;
+    RecoveryProperty;
+    ltl FinishDuplicate: "F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END)";
+}
