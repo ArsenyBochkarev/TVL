@@ -53,6 +53,7 @@ hs_err_pid*
 src/main/scala/Grammar/*.java
 src/main/scala/Grammar/*.tokens
 src/main/scala/Grammar/*.interp
+**/.antlr/
 
 ### SPIN ###
 docs/examples/*/states/*
