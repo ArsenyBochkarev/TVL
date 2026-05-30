@@ -3,234 +3,202 @@ module Ring
 actor R1 {
     snt: send One1 to R2
 
-    repeat {
-        receive alts {
-            One1 from R4 => { me: send Win1 to R2; break }
-            One2 from R4 => {
-                send Two2 to R2
-                receive alts {
-                    Two1 from R4 => { send One2 to R2 } 
-                    Two2 from R4 => { break } 
-                    Two3 from R4 => { break }
-                    Two4 from R4 => { break }
-                }
+    repeat { receive alts {
+        One1 from R4 => { me: send Win1 to R2; break }
+        One2 from R4 => {
+            send Two2 to R2
+            receive alts {
+                Two1 from R4 => { send One2 to R2 } 
+                Two2 from R4 => { break } Two3 from R4 => { break } Two4 from R4 => { break }
             }
-            One3 from R4 => {
-                send Two3 to R2
-                receive alts {
-                    Two1 from R4 => { send One3 to R2 }
-                    Two2 from R4 => { send One3 to R2 }
-                    Two3 from R4 => { break }
-                    Two4 from R4 => { break }
-                }
-            }
-            One4 from R4 => {
-                send Two4 to R2
-                receive alts {
-                    Two1 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
-                    Two2 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
-                    Two3 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
-                    Two4 from R4 => { break }
-                }
-            }
-            Win1 from R4 => { me: send Win1 to R2; break }
-            Win2 from R4 => { send Win2 to R2; nme: break }
-            Win3 from R4 => { send Win3 to R2; nme: break }
-            Win4 from R4 => { send Win4 to R2; nme: break }
         }
-    }
+        One3 from R4 => {
+            send Two3 to R2
+            receive alts {
+                Two1 from R4 => { send One3 to R2 }
+                Two2 from R4 => { send One3 to R2 }
+                Two3 from R4 => { break } Two4 from R4 => { break }
+            }
+        }
+        One4 from R4 => {
+            send Two4 to R2
+            receive alts {
+                Two1 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
+                Two2 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
+                Two3 from R4 => { send One4 to R2; receive alts { One4 from R4 => { send Win4 to R2; break } } }
+                Two4 from R4 => { break }
+            }
+        }
+        Win1 from R4 => { me: send Win1 to R2; break }
+        Win2 from R4 => { send Win2 to R2; nme: break }
+        Win3 from R4 => { send Win3 to R2; nme: break }
+        Win4 from R4 => { send Win4 to R2; nme: break }
+    }}
     
-    repeat {
-        receive alts {
-            One1 from R4 => { send One1 to R2 }
-            One2 from R4 => { send One2 to R2 }
-            One3 from R4 => { send One3 to R2 }
-            One4 from R4 => { send One4 to R2 }
-            Two1 from R4 => { send Two1 to R2 }
-            Two2 from R4 => { send Two2 to R2 }
-            Two3 from R4 => { send Two3 to R2 }
-            Two4 from R4 => { send Two4 to R2 }
-            Win1 from R4 => { me: send Win1 to R2; break }
-            Win2 from R4 => { send Win2 to R2; nme: break }
-            Win3 from R4 => { send Win3 to R2; nme: break }
-            Win4 from R4 => { send Win4 to R2; nme: break }
-        }
-    }
+    repeat { receive alts {
+        One1 from R4 => { send One1 to R2 }
+        One2 from R4 => { send One2 to R2 }
+        One3 from R4 => { send One3 to R2 }
+        One4 from R4 => { send One4 to R2 }
+        Two1 from R4 => { send Two1 to R2 }
+        Two2 from R4 => { send Two2 to R2 }
+        Two3 from R4 => { send Two3 to R2 }
+        Two4 from R4 => { send Two4 to R2 }
+        Win1 from R4 => { me: send Win1 to R2; break }
+        Win2 from R4 => { send Win2 to R2; nme: break }
+        Win3 from R4 => { send Win3 to R2; nme: break }
+        Win4 from R4 => { send Win4 to R2; nme: break }
+    }}
 }
 
 actor R2 {
     snt: send One2 to R3
     
-    repeat {
-        receive alts {
-            One1 from R1 => {
-                send Two1 to R3
-                receive alts {
-                    Two1 from R1 => { break } 
-                    Two2 from R1 => { break }
-                    Two3 from R1 => { break }
-                    Two4 from R1 => { break }
-                }
+    repeat { receive alts {
+        One1 from R1 => {
+            send Two1 to R3
+            receive alts {
+                Two1 from R1 => { break } Two2 from R1 => { break }
+                Two3 from R1 => { break } Two4 from R1 => { break }
             }
-            One2 from R1 => { me: send Win2 to R3; break }
-            One3 from R1 => {
-                send Two3 to R3
-                receive alts {
-                    Two1 from R1 => { send One3 to R3 }
-                    Two2 from R1 => { send One3 to R3 }
-                    Two3 from R1 => { break }
-                    Two4 from R1 => { break }
-                }
-            }
-            One4 from R1 => {
-                send Two4 to R3
-                receive alts {
-                    Two1 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
-                    Two2 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
-                    Two3 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
-                    Two4 from R1 => { break }
-                }
-            }
-            Win1 from R1 => { send Win1 to R3; nme: break }
-            Win2 from R1 => { me: send Win2 to R3; break }
-            Win3 from R1 => { send Win3 to R3; nme: break }
-            Win4 from R1 => { send Win4 to R3; nme: break }
         }
-    }
+        One2 from R1 => { me: send Win2 to R3; break }
+        One3 from R1 => {
+            send Two3 to R3
+            receive alts {
+                Two1 from R1 => { send One3 to R3 }
+                Two2 from R1 => { send One3 to R3 }
+                Two3 from R1 => { break } Two4 from R1 => { break }
+            }
+        }
+        One4 from R1 => {
+            send Two4 to R3
+            receive alts {
+                Two1 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
+                Two2 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
+                Two3 from R1 => { send One4 to R3; receive alts { One4 from R1 => { send Win4 to R3; break } } }
+                Two4 from R1 => { break }
+            }
+        }
+        Win1 from R1 => { send Win1 to R3; nme: break }
+        Win2 from R1 => { me: send Win2 to R3; break }
+        Win3 from R1 => { send Win3 to R3; nme: break }
+        Win4 from R1 => { send Win4 to R3; nme: break }
+    }}
     
-    repeat {
-        receive alts {
-            One1 from R1 => { send One1 to R3 }
-            One2 from R1 => { send One2 to R3 }
-            One3 from R1 => { send One3 to R3 }
-            One4 from R1 => { send One4 to R3 }
-            Two1 from R1 => { send Two1 to R3 }
-            Two2 from R1 => { send Two2 to R3 }
-            Two3 from R1 => { send Two3 to R3 }
-            Two4 from R1 => { send Two4 to R3 }
-            Win1 from R1 => { send Win1 to R3; nme: break }
-            Win2 from R1 => { me: send Win2 to R3; break }
-            Win3 from R1 => { send Win3 to R3; nme: break }
-            Win4 from R1 => { send Win4 to R3; nme: break }
-        }
-    }
+    repeat { receive alts {
+        One1 from R1 => { send One1 to R3 }
+        One2 from R1 => { send One2 to R3 }
+        One3 from R1 => { send One3 to R3 }
+        One4 from R1 => { send One4 to R3 }
+        Two1 from R1 => { send Two1 to R3 }
+        Two2 from R1 => { send Two2 to R3 }
+        Two3 from R1 => { send Two3 to R3 }
+        Two4 from R1 => { send Two4 to R3 }
+        Win1 from R1 => { send Win1 to R3; nme: break }
+        Win2 from R1 => { me: send Win2 to R3; break }
+        Win3 from R1 => { send Win3 to R3; nme: break }
+        Win4 from R1 => { send Win4 to R3; nme: break }
+    }}
 }
 
 actor R3 {
     snt: send One3 to R4
     
-    repeat {
-        receive alts {
-            One1 from R2 => {
-                send Two1 to R4
-                receive alts {
-                    Two1 from R2 => { break }
-                    Two2 from R2 => { break }
-                    Two3 from R2 => { break }
-                    Two4 from R2 => { break }
-                }
+    repeat { receive alts {
+        One1 from R2 => {
+            send Two1 to R4
+            receive alts {
+                Two1 from R2 => { break } Two2 from R2 => { break }
+                Two3 from R2 => { break } Two4 from R2 => { break }
             }
-            One2 from R2 => {
-                send Two2 to R4
-                receive alts {
-                    Two1 from R2 => { break }
-                    Two2 from R2 => { break }
-                    Two3 from R2 => { break }
-                    Two4 from R2 => { break }
-                }
-            }
-            One3 from R2 => { me: send Win3 to R4; break }
-            One4 from R2 => {
-                send Two4 to R4
-                receive alts {
-                    Two1 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
-                    Two2 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
-                    Two3 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
-                    Two4 from R2 => { break }
-                }
-            }
-            Win1 from R2 => { send Win1 to R4; nme: break }
-            Win2 from R2 => { send Win2 to R4; nme: break }
-            Win3 from R2 => { me: send Win3 to R4; break }
-            Win4 from R2 => { send Win4 to R4; nme: break }
         }
-    }
+        One2 from R2 => {
+            send Two2 to R4
+            receive alts {
+                Two1 from R2 => { break } Two2 from R2 => { break }
+                Two3 from R2 => { break } Two4 from R2 => { break }
+            }
+        }
+        One3 from R2 => { me: send Win3 to R4; break }
+        One4 from R2 => {
+            send Two4 to R4
+            receive alts {
+                Two1 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
+                Two2 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
+                Two3 from R2 => { send One4 to R4; receive alts { One4 from R2 => { send Win4 to R4; break } } }
+                Two4 from R2 => { break }
+            }
+        }
+        Win1 from R2 => { send Win1 to R4; nme: break }
+        Win2 from R2 => { send Win2 to R4; nme: break }
+        Win3 from R2 => { me: send Win3 to R4; break }
+        Win4 from R2 => { send Win4 to R4; nme: break }
+    }}
     
-    repeat {
-        receive alts {
-            One1 from R2 => { send One1 to R4 }
-            One2 from R2 => { send One2 to R4 }
-            One3 from R2 => { send One3 to R4 }
-            One4 from R2 => { send One4 to R4 }
-            Two1 from R2 => { send Two1 to R4 }
-            Two2 from R2 => { send Two2 to R4 }
-            Two3 from R2 => { send Two3 to R4 }
-            Two4 from R2 => { send Two4 to R4 }
-            Win1 from R2 => { send Win1 to R4; nme: break }
-            Win2 from R2 => { send Win2 to R4; nme: break }
-            Win3 from R2 => { me: send Win3 to R4; break }
-            Win4 from R2 => { send Win4 to R4; nme: break }
-        }
-    }
+    repeat { receive alts {
+        One1 from R2 => { send One1 to R4 }
+        One2 from R2 => { send One2 to R4 }
+        One3 from R2 => { send One3 to R4 }
+        One4 from R2 => { send One4 to R4 }
+        Two1 from R2 => { send Two1 to R4 }
+        Two2 from R2 => { send Two2 to R4 }
+        Two3 from R2 => { send Two3 to R4 }
+        Two4 from R2 => { send Two4 to R4 }
+        Win1 from R2 => { send Win1 to R4; nme: break }
+        Win2 from R2 => { send Win2 to R4; nme: break }
+        Win3 from R2 => { me: send Win3 to R4; break }
+        Win4 from R2 => { send Win4 to R4; nme: break }
+    }}
 }
 
 actor R4 {
     snt: send One4 to R1
     
-    repeat {
-        receive alts {
-            One1 from R3 => {
-                send Two1 to R1
-                receive alts {
-                    Two1 from R3 => { break }
-                    Two2 from R3 => { break }
-                    Two3 from R3 => { break }
-                    Two4 from R3 => { break }
-                }
+    repeat { receive alts {
+        One1 from R3 => {
+            send Two1 to R1
+            receive alts {
+                Two1 from R3 => { break } Two2 from R3 => { break }
+                Two3 from R3 => { break } Two4 from R3 => { break }
             }
-            One2 from R3 => {
-                send Two2 to R1
-                receive alts {
-                    Two1 from R3 => { break }
-                    Two2 from R3 => { break }
-                    Two3 from R3 => { break }
-                    Two4 from R3 => { break }
-                }
-            }
-            One3 from R3 => {
-                send Two3 to R1
-                receive alts {
-                    Two1 from R3 => { break }
-                    Two2 from R3 => { break }
-                    Two3 from R3 => { break }
-                    Two4 from R3 => { break }
-                }
-            }
-            One4 from R3 => { me: send Win4 to R1; break }
-            
-            Win1 from R3 => { send Win1 to R1; nme: break }
-            Win2 from R3 => { send Win2 to R1; nme: break }
-            Win3 from R3 => { send Win3 to R1; nme: break }
-            Win4 from R3 => { me: send Win4 to R1; break }
         }
-    }
+        One2 from R3 => {
+            send Two2 to R1
+            receive alts {
+                Two1 from R3 => { break } Two2 from R3 => { break }
+                Two3 from R3 => { break } Two4 from R3 => { break }
+            }
+        }
+        One3 from R3 => {
+            send Two3 to R1
+            receive alts {
+                Two1 from R3 => { break } Two2 from R3 => { break }
+                Two3 from R3 => { break } Two4 from R3 => { break }
+            }
+        }
+        One4 from R3 => { me: send Win4 to R1; break }
+        
+        Win1 from R3 => { send Win1 to R1; nme: break }
+        Win2 from R3 => { send Win2 to R1; nme: break }
+        Win3 from R3 => { send Win3 to R1; nme: break }
+        Win4 from R3 => { me: send Win4 to R1; break }
+    }}
     
-    repeat {
-        receive alts {
-            One1 from R3 => { send One1 to R1 }
-            One2 from R3 => { send One2 to R1 }
-            One3 from R3 => { send One3 to R1 }
-            One4 from R3 => { send One4 to R1 }
-            Two1 from R3 => { send Two1 to R1 }
-            Two2 from R3 => { send Two2 to R1 }
-            Two3 from R3 => { send Two3 to R1 }
-            Two4 from R3 => { send Two4 to R1 }
-            Win1 from R3 => { send Win1 to R1; nme: break }
-            Win2 from R3 => { send Win2 to R1; nme: break }
-            Win3 from R3 => { send Win3 to R1; nme: break }
-            Win4 from R3 => { me: send Win4 to R1; break }
-        }
-    }
+    repeat { receive alts {
+        One1 from R3 => { send One1 to R1 }
+        One2 from R3 => { send One2 to R1 }
+        One3 from R3 => { send One3 to R1 }
+        One4 from R3 => { send One4 to R1 }
+        Two1 from R3 => { send Two1 to R1 }
+        Two2 from R3 => { send Two2 to R1 }
+        Two3 from R3 => { send Two3 to R1 }
+        Two4 from R3 => { send Two4 to R1 }
+        Win1 from R3 => { send Win1 to R1; nme: break }
+        Win2 from R3 => { send Win2 to R1; nme: break }
+        Win3 from R3 => { send Win3 to R1; nme: break }
+        Win4 from R3 => { me: send Win4 to R1; break }
+    }}
 }
 
 specs {
