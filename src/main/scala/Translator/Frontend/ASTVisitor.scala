@@ -233,11 +233,17 @@ class ASTVisitor(val debug: Boolean = false) {
 
       if (r.NUMBER() != null) {
         // Countable loop
-        val bodyEnd = translateBlock(r.block(), actor, loopStart)
-        val guardVar = getGuardVarName(bodyEnd, actor)
+        val guardCheckPc = loopStart
+        val bodyStart = nextId()
+        val bodyEnd = translateBlock(r.block(), actor, bodyStart)
+
+        val loopBackInstr = IRJump(bodyEnd, r.getStart.getLine, scheduler, guardCheckPc)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, loopBackInstr)
+
+        val guardVar = getGuardVarName(guardCheckPc, actor)
         val iterations = r.NUMBER().getText.toInt // TODO: throw proper error here if no Int was detected
-        val jumpGuardInstr = IRJumpGuard(bodyEnd, r.getStart.getLine, scheduler, afterLoop, guardVar, loopStart, iterations)
-        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(bodyEnd, jumpGuardInstr)
+        val jumpGuardInstr = IRJumpGuard(guardCheckPc, r.getStart.getLine, scheduler, afterLoop, guardVar, bodyStart, iterations)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(guardCheckPc, jumpGuardInstr)
       } else {
         // Uncountable loop
         val bodyEnd = translateBlock(r.block(), actor, loopStart)
