@@ -12,34 +12,20 @@ actor N1 {
         send ECHO to N4
 
         // Wait for 2 ECHO's from other nodes (its own already included)
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
+                ECHO from N2 => { skip }
+                ECHO from N3 => { skip }
+                ECHO from N4 => { skip }
             }
         }
     } or {
         // N1 does not initiate and acts like a regular node
-        n_init: repeat {
+        n_init: repeat 2 {
             receive alts {
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        repeat {
-            receive alts {
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
+                ECHO from N2 => { skip }
+                ECHO from N3 => { skip }
+                ECHO from N4 => { skip }
             }
         }
     }
@@ -53,35 +39,20 @@ actor N2 {
         send ECHO to N4
 
         // Wait for 2 ECHO's from other nodes (its own already included)
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                ECHO from N1 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                ECHO from N1 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
+                ECHO from N1 => { skip }
+                ECHO from N3 => { skip }
+                ECHO from N4 => { skip }
             }
         }
     } or {
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N3 => { break }
-                ECHO from N4 => { break }
+                INIT from N1 => { skip }
+                ECHO from N1 => { skip }
+                ECHO from N3 => { skip }
+                ECHO from N4 => { skip }
             }
         }
 
@@ -99,35 +70,20 @@ actor N3 {
         send ECHO to N2
         send ECHO to N4
 
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N4 => { break }
+                ECHO from N1 => { skip }
+                ECHO from N2 => { skip }
+                ECHO from N4 => { skip }
             }
         }
     } or {
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N4 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N4 => { break }
+                INIT from N1 => { skip }
+                ECHO from N1 => { skip }
+                ECHO from N2 => { skip }
+                ECHO from N4 => { skip }
             }
         }
 
@@ -145,35 +101,20 @@ actor N4 {
         send ECHO to N2
         send ECHO to N3
 
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
+                ECHO from N1 => { skip }
+                ECHO from N2 => { skip }
+                ECHO from N3 => { skip }
             }
         }
     } or {
-        wait_echo1: repeat {
+        wait_echos: repeat 2 {
             receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
-            }
-        }
-        wait_echo2: repeat {
-            receive alts {
-                INIT from N1 => { break }
-                ECHO from N1 => { break }
-                ECHO from N2 => { break }
-                ECHO from N3 => { break }
+                INIT from N1 => { skip }
+                ECHO from N1 => { skip }
+                ECHO from N2 => { skip }
+                ECHO from N3 => { skip }
             }
         }
 
