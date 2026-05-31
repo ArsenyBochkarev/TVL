@@ -1,13 +1,13 @@
------------------------- MODULE ChangRobertsUnrolled ------------------------
+------------------------ MODULE ring_lcr_nonparam ------------------------
 EXTENDS Naturals, Sequences
 
-(* --algorithm ChangRobertsUnrolled {
+(* --algorithm ring_lcr_nonparam {
   variables
     msgsR1 = {}, msgsR2 = {}, msgsR3 = {}, msgsR4 = {};
 
-  process (ActorR1 = "R1")
+  fair process (ActorR1 = "R1")
   variables
-    initiator \in BOOLEAN,
+    initiator = TRUE,
     state = IF initiator THEN "cand" ELSE "lost",
     myId = 1;
   {
@@ -20,24 +20,24 @@ EXTENDS Naturals, Sequences
         await msgsR1 /= {};
         with (msg \in msgsR1) {
             msgsR1 := msgsR1 \ {msg};
-            if (msg = "Stop") {
-                msgsR2 := msgsR2 \cup {"Stop"};
-                break;
+            if (msg = 0) {
+                msgsR2 := msgsR2 \cup {0};
+                goto Done;
             } else if (state = "lost") {
                 msgsR2 := msgsR2 \cup {msg};
-            } else if (msg < myId) {
+            } else if (msg > myId) {
                 state := "lost";
                 msgsR2 := msgsR2 \cup {msg};
             } else if (msg = myId) {
                 state := "won";
-                msgsR2 := msgsR2 \cup {"Stop"};
-                break;
+                msgsR2 := msgsR2 \cup {0};
+                goto Done;
             }
         }
     }
   }
 
-  process (ActorR2 = "R2")
+  fair process (ActorR2 = "R2")
   variables
     initiator \in BOOLEAN,
     state = IF initiator THEN "cand" ELSE "lost",
@@ -52,24 +52,24 @@ EXTENDS Naturals, Sequences
         await msgsR2 /= {};
         with (msg \in msgsR2) {
             msgsR2 := msgsR2 \ {msg};
-            if (msg = "Stop") {
-                msgsR3 := msgsR3 \cup {"Stop"};
-                break;
+            if (msg = 0) {
+                msgsR3 := msgsR3 \cup {0};
+                goto Done;
             } else if (state = "lost") {
                 msgsR3 := msgsR3 \cup {msg};
-            } else if (msg < myId) {
+            } else if (msg > myId) {
                 state := "lost";
                 msgsR3 := msgsR3 \cup {msg};
             } else if (msg = myId) {
                 state := "won";
-                msgsR3 := msgsR3 \cup {"Stop"};
-                break;
+                msgsR3 := msgsR3 \cup {0};
+                goto Done;
             }
         }
     }
   }
 
-  process (ActorR3 = "R3")
+  fair process (ActorR3 = "R3")
   variables
     initiator \in BOOLEAN,
     state = IF initiator THEN "cand" ELSE "lost",
@@ -84,24 +84,24 @@ EXTENDS Naturals, Sequences
         await msgsR3 /= {};
         with (msg \in msgsR3) {
             msgsR3 := msgsR3 \ {msg};
-            if (msg = "Stop") {
-                msgsR4 := msgsR4 \cup {"Stop"};
-                break;
+            if (msg = 0) {
+                msgsR4 := msgsR4 \cup {0};
+                goto Done;
             } else if (state = "lost") {
                 msgsR4 := msgsR4 \cup {msg};
-            } else if (msg < myId) {
+            } else if (msg > myId) {
                 state := "lost";
                 msgsR4 := msgsR4 \cup {msg};
             } else if (msg = myId) {
                 state := "won";
-                msgsR4 := msgsR4 \cup {"Stop"};
-                break;
+                msgsR4 := msgsR4 \cup {0};
+                goto Done;
             }
         }
     }
   }
 
-  process (ActorR4 = "R4")
+  fair process (ActorR4 = "R4")
   variables
     initiator \in BOOLEAN,
     state = IF initiator THEN "cand" ELSE "lost",
@@ -116,18 +116,18 @@ EXTENDS Naturals, Sequences
         await msgsR4 /= {};
         with (msg \in msgsR4) {
             msgsR4 := msgsR4 \ {msg};
-            if (msg = "Stop") {
-                msgsR1 := msgsR1 \cup {"Stop"};
-                break;
+            if (msg = 0) {
+                msgsR1 := msgsR1 \cup {0};
+                goto Done;
             } else if (state = "lost") {
                 msgsR1 := msgsR1 \cup {msg};
-            } else if (msg < myId) {
+            } else if (msg > myId) {
                 state := "lost";
                 msgsR1 := msgsR1 \cup {msg};
             } else if (msg = myId) {
                 state := "won";
-                msgsR1 := msgsR1 \cup {"Stop"};
-                break;
+                msgsR1 := msgsR1 \cup {0};
+                goto Done;
             }
         }
     }
@@ -136,11 +136,12 @@ EXTENDS Naturals, Sequences
 
 SingleLeader ==
   [](
-    (state["R1"] = "won" => (state["R2"] /= "won" /\ state["R3"] /= "won" /\ state["R4"] /= "won")) /\
-    (state["R2"] = "won" => (state["R1"] /= "won" /\ state["R3"] /= "won" /\ state["R4"] /= "won")) /\
-    (state["R3"] = "won" => (state["R1"] /= "won" /\ state["R2"] /= "won" /\ state["R4"] /= "won")) /\
-    (state["R4"] = "won" => (state["R1"] /= "won" /\ state["R2"] /= "won" /\ state["R3"] /= "won"))
+    (state_ = "won" => (state_A /= "won" /\ state_Ac /= "won" /\ state /= "won")) /\
+    (state_A = "won" => (state_ /= "won" /\ state_Ac /= "won" /\ state /= "won")) /\
+    (state_Ac = "won" => (state_ /= "won" /\ state_A /= "won" /\ state /= "won")) /\
+    (state = "won" => (state_ /= "won" /\ state_A /= "won" /\ state_Ac /= "won"))
   )
 
 AllTerminated == 
-    (\E n \in {"R1", "R2", "R3", "R4"} : initiator[n]) ~>  <>(\A p \in {"R1", "R2", "R3", "R4"} : pc[p] = "Done")
+    (initiator_ \/ initiator_A \/ initiator_Ac \/ initiator) ~>  <>(\A p \in {"R1", "R2", "R3", "R4"} : pc[p] = "Done")
+====
