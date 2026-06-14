@@ -18,7 +18,7 @@ class PlusCal extends TargetTranslator {
   private var msgDeliveredProperties: List[String] = List.empty[String]
   override def getMsgDeliveredProperty: String =
     if (!isPropEnabled("MsgDeliveredProperty") || msgDeliveredProperties.isEmpty) ""
-    else "MessageDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
+    else "MsgDeliveredProperty == " + msgDeliveredProperties.mkString(s"\n$and ")
   override def getValidityProperty: String =
     if (!isPropEnabled("ValidityProperty") || finishedProperties.isEmpty) ""
     else
@@ -50,6 +50,12 @@ class PlusCal extends TargetTranslator {
     val writer = new BufferedWriter(new FileWriter(fileName, true))
     try {
       userSpecs.foreach { spec => writer.write(indent + s"$spec\n") }
+      if isPropEnabled("MsgDeliveredProperty") then
+        writer.write(indent + "MsgDeliveredProperty\n")
+      if isPropEnabled("ValidityProperty") then
+        writer.write(indent + "ValidityProperty\n")
+      if isPropEnabled("FinishingProperty") then
+        writer.write(indent + "FinishingProperty\n")
     } finally {
       writer.close()
     }
@@ -384,7 +390,7 @@ class PlusCal extends TargetTranslator {
       properties.append("FinishingProperty")
       finishingEnabled = true
     if (isPropEnabled("msg") && msgDeliveredProperties.nonEmpty)
-      properties.append("MessageDeliveredProperty")
+      properties.append("MsgDeliveredProperty")
     var validityEnabled = false
     if (isPropEnabled("validity") && finishedProperties.nonEmpty)
       properties.append("ValidityProperty")
@@ -396,6 +402,14 @@ class PlusCal extends TargetTranslator {
     sb.append("PROPERTIES\n")
     properties.foreach { p => sb.append(indent + s"$p\n") }
 
+    sb.toString()
+  }
+
+  override def generateTemplateSpecs: String = {
+    val sb = new StringBuilder()
+    sb.append(getFinishingProperty+"\n")
+    sb.append(getMsgDeliveredProperty+"\n")
+    sb.append(getValidityProperty+"\n")
     sb.toString()
   }
 }
