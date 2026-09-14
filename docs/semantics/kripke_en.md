@@ -1,0 +1,134 @@
+Message -- a named constant `Message`. A dictionary (map) of message queue dictionaries to an actor -- `Q: map[String, map[String, Message]]`. Keys are actor names.
+
+*Note*:
+- `;` -- sequential execution
+- `-->` -- logical entailment
+- `->` -- edge designation
+- `nil` -- absence of action
+- `MAX_QUEUE_SIZE` -- limit on channel size
+- Instructions introducing a scoped construct (`repeat`, `repeatN`, `parallel`) possess an internal parameter of the initial state. Implementation with a stack inside the actor tuple does not work, since it is impossible to distinguish the start of a loop from its normal execution.
+
+Each actor is a tuple `(S, S0, L, T, F)`, where:
+- `S` -- the set of possible states of the actor
+  - State `s` of actor `A` is the current instruction in the program that `A` must execute
+- `S0` -- the set of initial states of the actor
+- `L` -- labeling function. Associates a state with actor properties:
+  - `stepInsideScope(inst, s)` -- returns all edges that exist for `s` inside the current scoped construct: `repeat`, `repeatN`, or `parallel`
+- `T` -- the set of possible transitions. A transition is a tuple `(s, cond, effect, n)`, where
+  - `s` -- the current state of the actor
+  - `cond` -- the transition condition
+  - `effect` -- a function modifying the global state `Q`
+  - `n` -- the next state of the actor ("∃ an edge from `s` to `n`")
+  - Transition variants:
+    - Send:
+      - `s` = `send M to B; s'`
+      - `cond` = `(Q = q_all U Q[A][B]) && (length(Q[A][B]) < MAX_QUEUE_SIZE)`
+      - `effect` = `Q := q_all U {Q[A][B] :: M}` (added message `M` to the end)
+      - `n` = `s'`
+    - Receive:
+      - Two variants, depending on the state of the message queue to `A` from `B`
+      - `s` = `receive M from B; s'`
+        - `cond` = `Q = q_all U {M :: Q[A][B]}` (message `M` at the head of the queue to `A` from `B`)
+          - `n` = `s'`
+          - `effect` = `Q := q_all U Q[A][B]`
+        - `cond` = `Q = q_all U {K :: Q[A][B]}`, where `K` != `M` (message `M` is not at the head of the queue to `A` from `B`)
+          - `n` = `s`
+          - `effect` = `nil`
+    - Receive alts:
+      - Four variants, depending on the message queue to `A` and the presence of `otherwise`:
+      - Without `otherwise`:
+        - `s` = `receive alts { M_0_0 from B_0 => { s_0_0 } ... M_i_0 from B_0 => { s_i_0 } ... M_I_0 from B_0 => { s_I_0 } ... M_0_b from B_b => { s_0_b } ... M_j_b from B_b => { s_j_b } ... M_J_b from B_b => { s_J_b } ... M_0_N from B_N => { s_0_N } ... M_k_N from B_N => { s_k_N } ... M_K_N from B_N => { s_K_N } }`
+        - Received message:
+          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`
+          - `effect` = `Q := q_all U Q[A][B_m]`
+          - `n` = `P_m`, where `m=0..M`, where `M` is the total number of branches
+        - Did not receive message:
+          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`, where `M` != any message from `receive alts`
+          - `effect` = `nil`
+          - `n` = `s` (returned to original state, waiting)
+      - With `otherwise`:
+        - `s` = `receive alts { M_0_0 from B_0 => { s_0_0 } ... M_i_0 from B_0 => { s_i_0 } ... M_I_0 from B_0 => { s_I_0 } ... M_0_b from B_b => { s_0_b } ... M_j_b from B_b => { s_j_b } ... M_J_b from B_b => { s_J_b } ... M_0_N from B_N => { s_0_N } ... M_k_N from B_N => { s_k_N } ... M_K_N from B_N => { s_K_N } otherwise => { s_other } }`
+        - Received message (similar to previous case):
+          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`
+          - `effect` = `Q := q_all U Q[A][B_m]`
+          - `n` = `P_m`, where `m=0..M`, where `M` is the total number of branches
+        - Did not receive message:
+          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`, where `M` != any message from `receive alts`
+          - `effect` = `nil`
+          - `n` = `s_other` (moved to the state from the `otherwise` branch)
+    - Choose:
+      - ∃ `N` transitions, `∀i=0..N`:
+        - `s` = `choose { s_1 } or ... or { s_N }`
+        - `cond` = `true`
+        - `effect` = `nil`
+        - `n` = `s_i`
+    - Repeat:
+      - Three variants:
+        - Initially save the loop body, as an internal parameter for the `repeat` instruction
+          - `s` = `repeat { s_1 }; P`
+          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
+        - Similar, but with a saved parameter:
+          - `s` = `repeat [s_1] { s_1; s_1' }; P`
+          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
+        - When we have a saved parameter, and we have finished the current loop iteration, restart it:
+          - `s` = `repeat { nil }; P` (no actions left in the current loop iteration)
+          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] { s_1; s_1' }; P` (use the parameter and set the loop body again)
+    - Repeat N:
+      - Three variants, similar to the option above, but with the possibility of exiting when the counter finishes
+      - Not just syntactic sugar, since we want to support `break` for it
+        - Initially save the loop body, as an internal parameter for the `repeat` instruction
+          - `s` = `repeat N { s_1; s_1' }; P`
+          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] N-1 { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
+        - Similar, but with a saved parameter:
+          - `s` = `repeat [s_1] N { s_1; s_1' }; P`
+          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
+        - When we have a saved parameter, and we have finished the current loop iteration, restart it:
+          - `s` = `repeat { nil }; P` (no actions left in the current loop iteration)
+          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
+          - `effect` = `nil`
+          - `n` = `repeat [s_1] { s_1; s_1' }; P` (use the parameter and set the loop body again)
+    - Break:
+      - Four variants, depending on the loop type:
+      - Without counter:
+          - `s` = `repeat { s_1 }; P`
+          - `cond` = `stepInsideScope(repeatN, s_1) = break`
+          - `effect` = `nil`
+          - `n` = `P`
+      - Without counter, memorized body:
+          - `s` = `repeat [s_body] { s_1 }; P`
+          - `cond` = `stepInsideScope(repeatN, s_1) = break`
+          - `effect` = `nil`
+          - `n` = `P`
+      - With counter:
+        - `s` = `repeat N { s_1 }; P`
+        - `cond` = `stepInsideScope(repeatN, s_1) = break`
+        - `effect` = `nil`
+        - `n` = `P`
+      - With counter, memorized body:
+        - `s` = `repeat [s_body] N { s_1 }; P`
+        - `cond` = `stepInsideScope(repeatN, s_1) = break`
+        - `effect` = `nil`
+        - `n` = `P`
+    - Parallel:
+      - `parallel { s_1 } and ... and { s_i } and ... and { s_N }; P`:
+      - `effect` = `nil`
+      - Two variants, depending on whether the execution of all `parallel` branches has finished, or not:
+      - Can proceed further:
+        - `cond` = `stepInsideScope(parallel, s_i) = s_i' && s_i' != nil`
+        - ∃ `N+1` transitions, `∀i=0..N`:
+          - `n` = `parallel { s_1 } and ... and { s_i' } and ... and { s_N }; P` (proceed along the current branch)
+          - `n` = `parallel { s_1 } and ... and { s_j } and ... and { s_N }; P`, where `j=1..i-1,i+1..N` (interleaving)
+      - Execution of all `parallel` branches has completed or we encountered a `break`:
+        - `cond` = `(stepInsideScope(parallel, s_i) = s_i' && s_i' == nil) || (stepInsideScope(parallel, s_i) = s_i' && s_i' == break)`
+        - `n` = `P`
+- `F` -- the set of final states
