@@ -6,6 +6,11 @@ import org.scalatest.funsuite.AnyFunSuite
 
 import scala.util.matching.Regex
 
+/**
+ * Unit tests suite for verifying IR translation of specific TVL language constructs.
+ * Validates that elements like actors, loops, and parallel blocks produce the correct
+ * IR case classes (e.g. `IRQueuePush`, `IRJump`, etc.).
+ */
 class IRGenerationSpec extends AnyFunSuite {
 
   IRGenerationTestData.rules.foreach { tc =>

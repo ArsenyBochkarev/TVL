@@ -7,6 +7,11 @@ import org.scalatest.funsuite.AnyFunSuite
 import java.io.File
 import java.nio.file.{Files, Paths, Path}
 
+/**
+ * Integration suite for testing TVL to IR translation.
+ * It reads all `.tvl` files in the `examples/` directory, compiles them,
+ * and matches the generated IR against `.tvir` text files in `src/test/resources/tvir/`.
+ */
 class IntegrationIRSpec extends AnyFunSuite {
 
   def listTvlFiles(dir: File): Array[File] = {

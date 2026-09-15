@@ -35,6 +35,23 @@ Altough it is highly recommended to use [VS Code plugin](https://github.com/Arse
 - SPIN
 
 ### Run tests
+You can run all tests using:
 ```
 sbt test
 ```
+
+If you want to run specific test suites, you can use the separate configurations:
+
+1. **Translation Correctness Tests** (verifies SPN/TLA+ generation from IR):
+   ```
+   sbt correctness:test
+   ```
+
+2. **IR Generation Tests** (verifies TVL language to IR translation, and examples integration tests against `src/test/resources/tvir/` golden files):
+   ```
+   sbt ir:test
+   ```
+   *Note: If you modify the IR generation or add new examples, you can re-generate the golden `.tvir` output files by setting the `UPDATE_GOLDEN_FILES` environment variable. E.g.:*
+   ```
+   UPDATE_GOLDEN_FILES=1 sbt ir:test
+   ```
