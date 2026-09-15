@@ -1,6 +1,18 @@
 # TVL
 Telecom protocols Verification Language
 
+TVL is a small DSL designed to create models of communication protocols. Each actor of this protocol is described in an independent procedure. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into TVL IR, an intermediate representation that is a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
+
+The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending (`send`) and receiving (`receive`) mutate the global state of these queues, while ensuring properties such as `MAX_QUEUE_SIZE` invariants are met.
+
+TVL also provides means for property verification through specifications block (`specs`). It supports custom `ltl` and `ctl` formulas using labels, as well as template-based properties (like `FinishingProperty` or `MsgDeliveredProperty`) and implicitly generated label-based specifications.
+
+The generated TVL IR is translated into a target model checker language (like TLA+ or Spin) to perform the actual verification. Also, there is an ongoing work to build a native TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
+
+For more deep and formal theoretical background on how execution and configurations are defined, check out the documentation on semantics in `docs/semantics`:
+- [Operational semantics](docs/semantics/operational_en.md)
+- [Kripke structures](docs/semantics/kripke_en.md)
+
 ### Prerequisites
 - Java
 - ANTLRv4
