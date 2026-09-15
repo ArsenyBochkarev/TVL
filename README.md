@@ -1,15 +1,15 @@
 # TVL
 Telecom protocols Verification Language
 
-TVL is designed as an instruction-based control flow language where a distributed system is divided into independent procedures for each actor. Programs are compiled into an Intermediate Representation (IR), a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
+TVL is designed as an instruction-based control flow language where a distributed system is divided into independent procedures for each actor. Programs are compiled into an Intermediate Representation, a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
 
 The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending (`send`) and receiving (`receive`) mutate the global state of these queues, while ensuring properties such as `MAX_QUEUE_SIZE` invariants are met.
 
 TVL also provides means for property verification through specifications block (`specs`). It supports custom `ltl` and `ctl` formulas using labels, as well as template-based properties (like `FinishingProperty` or `MsgDeliveredProperty`) and implicitly generated label-based specifications.
 
 For more deep and formal theoretical background on how execution and configurations are defined, check out the documentation on semantics in `docs/semantics`:
-- [Operational semantics](docs/semantics/operational_en.md) (Russian original: [operational.md](docs/semantics/operational.md))
-- [Kripke structures](docs/semantics/kripke_en.md) (Russian original: [kripke.md](docs/semantics/kripke.md))
+- [Operational semantics](docs/semantics/operational_en.md)
+- [Kripke structures](docs/semantics/kripke_en.md)
 
 ### Prerequisites
 - Java
