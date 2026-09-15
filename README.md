@@ -1,7 +1,7 @@
 # TVL
 Telecom protocols Verification Language
 
-TVL is designed as an instruction-based control flow language where a distributed system is divided into independent procedures for each actor. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into an Intermediate Representation, a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
+TVL is designed as an instruction-based control flow language where a distributed system is divided into independent procedures for each actor. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into TVL IR, an intermediate representation that is a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
 
 The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending (`send`) and receiving (`receive`) mutate the global state of these queues, while ensuring properties such as `MAX_QUEUE_SIZE` invariants are met.
 
