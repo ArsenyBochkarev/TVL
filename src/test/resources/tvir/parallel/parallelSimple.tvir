@@ -1,0 +1,24 @@
+Actor: R1
+  1: IRQueuePop(1,4,(-1,-1),2,Q[R1][R3],X1)
+  2: IRQueuePop(2,5,(-1,-1),3,Q[R1][R3],X2)
+  3: IREnd(3,6,(-1,-1))
+
+Actor: R2
+  4: IRQueuePop(4,9,(-1,-1),5,Q[R2][R3],Y1)
+  5: IRQueuePop(5,10,(-1,-1),6,Q[R2][R3],Y2)
+  6: IREnd(6,11,(-1,-1))
+
+Actor: R3
+  7: IRParallelExec(7,14,(-1,0),List(9, 10),11)
+  9: IRQueuePush(9,15,(7,1),12,Q[R1][R3],X1)
+  10: IRQueuePush(10,18,(7,2),14,Q[R2][R3],Y1)
+  11: IRQueuePush(11,21,(-1,-1),16,Q[R4][R3],Z)
+  12: IRQueuePush(12,16,(7,1),13,Q[R1][R3],X2)
+  13: IRParallelEnd(13,14,(7,1),11)
+  14: IRQueuePush(14,19,(7,2),15,Q[R2][R3],Y2)
+  15: IRParallelEnd(15,14,(7,2),11)
+  16: IREnd(16,22,(-1,-1))
+
+Actor: R4
+  17: IRQueuePop(17,25,(-1,-1),18,Q[R4][R3],Z)
+  18: IREnd(18,26,(-1,-1))

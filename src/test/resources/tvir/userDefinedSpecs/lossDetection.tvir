@@ -1,0 +1,18 @@
+Actor: Receiver
+  11: IRBranch(11,16,(-1,-1),List(QueueCondition(Q[Receiver][Sender],Data,16), QueueCondition(Q[Receiver][Sender],DataLoss,18)),None)
+  13: IREnd(13,26,(-1,-1))
+  15: IRJump(15,15,(-1,-1),11)
+  16: IRSkip(16,19,(-1,-1),17)
+  17: IRJump(17,16,(-1,-1),15)
+  18: IRSkip(18,22,(-1,-1),19)
+  19: IRJump(19,16,(-1,-1),15)
+
+Actor: Sender
+  1: IRJumpGuard(1,4,(-1,-1),3,guard_Sender_1,4,10)
+  3: IREnd(3,12,(-1,-1))
+  4: IRChoice(4,5,(-1,-1),List(6, 7))
+  6: IRQueuePush(6,6,(-1,-1),9,Q[Receiver][Sender],Data)
+  7: IRQueuePush(7,9,(-1,-1),10,Q[Receiver][Sender],DataLoss)
+  8: IRJump(8,4,(-1,-1),1)
+  9: IRJump(9,5,(-1,-1),8)
+  10: IRJump(10,5,(-1,-1),8)

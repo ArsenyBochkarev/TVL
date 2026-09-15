@@ -1,0 +1,30 @@
+Actor: R1
+  1: IRBranch(1,4,(-1,-1),List(QueueCondition(Q[R1][R3],X1,4), QueueCondition(Q[R1][R3],X2,6)),None)
+  3: IREnd(3,8,(-1,-1))
+  4: IRSkip(4,5,(-1,-1),5)
+  5: IRJump(5,4,(-1,-1),3)
+  6: IRSkip(6,6,(-1,-1),7)
+  7: IRJump(7,4,(-1,-1),3)
+
+Actor: R2
+  8: IRQueuePop(8,11,(-1,-1),9,Q[R2][R3],Y1)
+  9: IRQueuePop(9,12,(-1,-1),10,Q[R2][R3],Y2)
+  10: IREnd(10,13,(-1,-1))
+
+Actor: R3
+  11: IRParallelExec(11,16,(-1,0),List(13, 14),15)
+  13: IRChoice(13,17,(11,1),List(17, 18))
+  14: IRQueuePush(14,23,(11,2),22,Q[R2][R3],Y1)
+  15: IRQueuePush(15,26,(-1,-1),24,Q[R4][R3],Z)
+  17: IRQueuePush(17,18,(11,1),20,Q[R1][R3],X1)
+  18: IRQueuePush(18,20,(11,1),21,Q[R1][R3],X2)
+  19: IRParallelEnd(19,16,(11,1),15)
+  20: IRJump(20,17,(11,1),19)
+  21: IRJump(21,17,(11,1),19)
+  22: IRQueuePush(22,24,(11,2),23,Q[R2][R3],Y2)
+  23: IRParallelEnd(23,16,(11,2),15)
+  24: IREnd(24,27,(-1,-1))
+
+Actor: R4
+  25: IRQueuePop(25,30,(-1,-1),26,Q[R4][R3],Z)
+  26: IREnd(26,31,(-1,-1))
