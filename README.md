@@ -7,6 +7,8 @@ The state of the system is primarily characterized by message queues between act
 
 TVL also provides means for property verification through specifications block (`specs`). It supports custom `ltl` and `ctl` formulas using labels, as well as template-based properties (like `FinishingProperty` or `MsgDeliveredProperty`) and implicitly generated label-based specifications.
 
+The TVL code is currently translated into a target model checker language (like TLA+ or Spin) to perform the actual verification. However, there is an ongoing work to build a native TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
+
 For more deep and formal theoretical background on how execution and configurations are defined, check out the documentation on semantics in `docs/semantics`:
 - [Operational semantics](docs/semantics/operational_en.md)
 - [Kripke structures](docs/semantics/kripke_en.md)
