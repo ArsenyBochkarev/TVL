@@ -7,7 +7,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  build-and-test:
+  build:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -16,7 +16,23 @@ jobs:
       - name: Build Docker image
         run: docker build -t tvl-env .
 
-      - name: Build and Test in Docker
+      - name: Build in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt compile
+          "
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: docker build -t tvl-env .
+
+      - name: Test in Docker
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
