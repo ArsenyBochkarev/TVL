@@ -1,0 +1,60 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        # Using type=gha caching specifically for GitHub Actions environments to speed up multi-job workflows
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: tvl-env:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt compile
+          "
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        # Leveraging the type=gha cache populated in the previous build step
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          load: true
+          tags: tvl-env:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Test in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt test
+          "

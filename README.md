@@ -30,6 +30,20 @@ For more deep and formal theoretical background on how execution and configurati
       java -cp /path/to/tla2tools.jar pcal.trans "$@"
       ```
 
+### Using Docker (Recommended)
+You can use the provided Dockerfile to easily set up an environment with all prerequisites installed.
+
+To build the Docker image:
+```shell
+docker build -t tvl-env .
+```
+
+To run the container interactively with your local repository mounted:
+```shell
+docker run -it -v $(pwd):/app tvl-env
+```
+Inside the container, you will have access to `java`, `sbt`, `spin`, and TLA+ tools (`tlc`, `pcal`). The ANTLR jar is available at `$ANTLR_JAR`.
+
 ### Building from scratch for the first time
 ```shell
 java -jar <ANTLR .jar> -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4
