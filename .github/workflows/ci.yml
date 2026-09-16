@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Build Docker image
+        run: docker build -t tvl-env .
+
+      - name: Build and Test in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt compile &&
+            sbt test
+          "
