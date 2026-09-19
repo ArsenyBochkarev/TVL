@@ -10,7 +10,7 @@ import java.nio.file.{Files, Paths, Path}
 /**
  * Integration suite for testing TVL to IR translation.
  * It reads all `.tvl` files in the `examples/` directory, compiles them,
- * and matches the generated IR against `.tvir` text files in `src/test/resources/tvir/`.
+ * and matches the generated IR against `.tvir` text files in `src/test/tvir/examples/`.
  */
 class IntegrationIRSpec extends AnyFunSuite {
 
@@ -27,7 +27,7 @@ class IntegrationIRSpec extends AnyFunSuite {
     test(s"Integration Test: ${tvlFile.getName} generates correct IR") {
       val relPath = examplesDir.toPath.relativize(tvlFile.toPath).toString
       val irFileName = relPath.stripSuffix(".tvl") + ".tvir"
-      val irFilePath = Paths.get("src", "test", "resources", "tvir", irFileName)
+      val irFilePath = Paths.get("src", "test", "tvir", "examples", irFileName)
 
       val cs = CharStreams.fromFileName(tvlFile.getPath)
       val res = FrontendPipeline.run(cs, debug = false)
