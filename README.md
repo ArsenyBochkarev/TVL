@@ -1,7 +1,5 @@
 # TVL
-Telecom protocols Verification Language
-
-TVL is a small DSL designed to create models of communication protocols. Each actor of this protocol is described in an independent procedure. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into TVL IR, an intermediate representation that is a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions (Jump, Branch, Choice).
+TVL is a small DSL designed to create models of communication protocols. Each actor of this protocol is described in an independent procedure. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into TVL IR, an intermediate representation that is a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions.
 
 The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending (`send`) and receiving (`receive`) mutate the global state of these queues, while ensuring properties such as `MAX_QUEUE_SIZE` invariants are met.
 
@@ -19,12 +17,12 @@ For more deep and formal theoretical background on how execution and configurati
 - SBT
 - Target model checker
   - For TLA+, make sure you have `pcal` and `tlc` set, e.g.
-    - ~/.local/bin/tlc:
+    - `~/.local/bin/tlc`:
       ```
       #!/bin/bash
       java -cp /path/to/tla2tools.jar tlc2.TLC "$@"
       ```
-    - ~/.local/bin/pcal:
+    - `~/.local/bin/pcal`:
       ```
       #!/bin/bash
       java -cp /path/to/tla2tools.jar pcal.trans "$@"
