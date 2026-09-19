@@ -1,0 +1,27 @@
+Actor: Automount
+  10: IRBranch(10,15,(-1,-1),List(QueueCondition(Q[Automount][UDev],DeviceAdded,15)),None)
+  12: IREnd(12,26,(-1,-1))
+  14: IRJump(14,14,(-1,-1),10)
+  15: IRChoice(15,17,(-1,-1),List(17, 18))
+  17: IRSkip(17,18,(-1,-1),20)
+  18: IRSkip(18,21,(-1,-1),22)
+  19: IRJump(19,15,(-1,-1),14)
+  20: IRQueuePush(20,19,(-1,-1),21,Q[FileManager][Automount],DeviceMounted)
+  21: IRJump(21,17,(-1,-1),19)
+  22: IRJump(22,17,(-1,-1),19)
+
+Actor: FileManager
+  23: IRBranch(23,30,(-1,-1),List(QueueCondition(Q[FileManager][Automount],DeviceMounted,28)),None)
+  25: IREnd(25,36,(-1,-1))
+  27: IRJump(27,29,(-1,-1),23)
+  28: IRSkip(28,32,(-1,-1),29)
+  29: IRJump(29,30,(-1,-1),27)
+
+Actor: UDev
+  1: IRChoice(1,5,(-1,-1),List(5, 6))
+  3: IREnd(3,11,(-1,-1))
+  5: IRQueuePush(5,6,(-1,-1),8,Q[Automount][UDev],DeviceAdded)
+  6: IRSkip(6,8,(-1,-1),9)
+  7: IRJump(7,4,(-1,-1),1)
+  8: IRJump(8,5,(-1,-1),7)
+  9: IRJump(9,5,(-1,-1),7)

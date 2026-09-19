@@ -1,0 +1,21 @@
+Actor: A
+  1: IRQueuePush(1,12,(-1,-1),2,Q[B][A],TOK)
+  2: IRQueuePop(2,13,(-1,-1),3,Q[A][B],TOK)
+  3: IREnd(3,14,(-1,-1))
+
+Actor: B
+  7: IRBranch(7,24,(-1,-1),List(QueueCondition(Q[B][A],TOK,10), QueueCondition(Q[B][C],TOK,14)),None)
+  9: IREnd(9,36,(-1,-1))
+  10: IRQueuePop(10,26,(-1,-1),11,Q[B][C],TOK)
+  11: IRQueuePush(11,27,(-1,-1),12,Q[A][B],TOK)
+  12: IRQueuePush(12,28,(-1,-1),13,Q[C][B],TOK)
+  13: IRJump(13,24,(-1,-1),9)
+  14: IRQueuePop(14,31,(-1,-1),15,Q[B][A],TOK)
+  15: IRQueuePush(15,32,(-1,-1),16,Q[C][B],TOK)
+  16: IRQueuePush(16,33,(-1,-1),17,Q[A][B],TOK)
+  17: IRJump(17,24,(-1,-1),9)
+
+Actor: C
+  4: IRQueuePush(4,18,(-1,-1),5,Q[B][C],TOK)
+  5: IRQueuePop(5,19,(-1,-1),6,Q[C][B],TOK)
+  6: IREnd(6,20,(-1,-1))

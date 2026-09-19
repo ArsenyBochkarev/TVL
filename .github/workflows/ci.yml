@@ -52,9 +52,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      - name: Test in Docker
+      - name: Test target generation in Docker
         run: |
           docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
-            sbt test
+            sbt target:test
+          "
+      - name: Test integration correctness in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt correctness:test
+          "
+      - name: Test unit IR generation in Docker
+        run: |
+          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+            java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
+            sbt unit:test
           "

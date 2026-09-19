@@ -1,0 +1,19 @@
+Actor: Supervisor
+  12: IRBranch(12,17,(-1,-1),List(QueueCondition(Q[Supervisor][Worker],Ping,17), QueueCondition(Q[Supervisor][Worker],Data,19)),None)
+  14: IREnd(14,22,(-1,-1))
+  16: IRJump(16,16,(-1,-1),12)
+  17: IRSkip(17,18,(-1,-1),18)
+  18: IRJump(18,17,(-1,-1),16)
+  19: IRSkip(19,19,(-1,-1),20)
+  20: IRJump(20,17,(-1,-1),16)
+
+Actor: Worker
+  1: IRQueuePush(1,5,(-1,-1),4,Q[Supervisor][Worker],Ping)
+  3: IREnd(3,13,(-1,-1))
+  4: IRChoice(4,6,(-1,-1),List(6, 7))
+  6: IRSkip(6,7,(-1,-1),9)
+  7: IRQueuePush(7,10,(-1,-1),11,Q[Supervisor][Worker],Data)
+  8: IRJump(8,4,(-1,-1),1)
+  9: IRQueuePush(9,8,(-1,-1),10,Q[Supervisor][Worker],Ping)
+  10: IRJump(10,6,(-1,-1),8)
+  11: IRJump(11,6,(-1,-1),8)
