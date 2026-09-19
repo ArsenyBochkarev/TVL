@@ -1,4 +1,4 @@
-package TranslationCorrectness
+package Target
 
 import Translator.FrontendPipeline
 import Translator.Target.*

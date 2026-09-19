@@ -1,4 +1,4 @@
-package TranslationCorrectness
+package Target
 
 case class TargetExpectation(targetName: String, expectedPatterns: List[String])
 case class TranslationTestCase(constructName: String, tvlCode: String, expectations: List[TargetExpectation])

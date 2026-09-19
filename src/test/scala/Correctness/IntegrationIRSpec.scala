@@ -1,4 +1,4 @@
-package IRGeneration
+package Correctness
 
 import Translator.FrontendPipeline
 import org.antlr.v4.runtime.CharStreams

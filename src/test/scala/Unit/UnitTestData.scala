@@ -1,8 +1,8 @@
-package IRGeneration
+package Unit
 
 case class IRTestCase(constructName: String, tvlCode: String, expectedPatterns: List[String])
 
-object IRGenerationTestData {
+object UnitTestData {
   val rules: List[IRTestCase] = List(
     IRTestCase(
       constructName = "actor",

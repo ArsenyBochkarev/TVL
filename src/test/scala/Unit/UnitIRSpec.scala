@@ -1,4 +1,4 @@
-package IRGeneration
+package Unit
 
 import Translator.FrontendPipeline
 import org.antlr.v4.runtime.CharStreams
@@ -11,9 +11,9 @@ import scala.util.matching.Regex
  * Validates that elements like actors, loops, and parallel blocks produce the correct
  * IR case classes (e.g. `IRQueuePush`, `IRJump`, etc.).
  */
-class IRGenerationSpec extends AnyFunSuite {
+class UnitIRSpec extends AnyFunSuite {
 
-  IRGenerationTestData.rules.foreach { tc =>
+  UnitTestData.rules.foreach { tc =>
     test(s"Instruction '${tc.constructName}' generates correct IR") {
       val cs = CharStreams.fromString(tc.tvlCode)
       val res = FrontendPipeline.run(cs, debug = false)
