@@ -33,8 +33,15 @@ RUN echo '#!/bin/bash\njava -cp /opt/tools/tla2tools.jar tlc2.TLC "$@"' > /usr/l
     echo '#!/bin/bash\njava -cp /opt/tools/tla2tools.jar pcal.trans "$@"' > /usr/local/bin/pcal && \
     chmod +x /usr/local/bin/tlc /usr/local/bin/pcal
 
+# Create a local user whose UID/GID match the host (passed via build args)
+ARG UID=1000
+ARG GID=1000
+RUN groupadd --gid ${GID} dev && \
+    useradd --create-home --uid ${UID} --gid dev --shell /bin/bash dev
+
 # Set working directory
 WORKDIR /app
+RUN chown dev:dev /app
 
 # The environment variables for antlr (to use from scripts if needed)
 ENV ANTLR_JAR=/opt/tools/antlr.jar
