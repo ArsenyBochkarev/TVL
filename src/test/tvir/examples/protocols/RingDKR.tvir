@@ -369,3 +369,23 @@ Actor: R4
   477: IRQueuePush(477,200,(-1,-1),478,Q[R1][R4],Win4)
   478: IRJump(478,200,(-1,-1),446)
   480: IRJump(480,188,(-1,-1),448)
+
+User specs:
+  ltl LeaderElected: F (R1.me || R2.me || R3.me || R4.me)
+  ltl MaxIdIsLeader: F R4.me
+  ltl ProtocolFinishes: F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END && R4.ACTOR_END)
+  ltl SingleLeader: G ((R1.me -> (!R2.me && !R3.me && !R4.me)) && (R2.me -> (!R1.me && !R3.me && !R4.me)) && (R3.me -> (!R1.me && !R2.me && !R4.me)) && (R4.me -> (!R1.me && !R2.me && !R3.me)))
+
+Labels:
+  R1.me: 107
+  R1.nme: 120
+  R1.snt: 1
+  R2.me: 234
+  R2.nme: 243
+  R2.snt: 123
+  R3.me: 363
+  R3.nme: 368
+  R3.snt: 246
+  R4.me: 477
+  R4.nme: 474
+  R4.snt: 371

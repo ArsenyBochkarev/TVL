@@ -1,13 +1,13 @@
 # TVL
-TVL is a small DSL designed to create models of communication protocols. Each actor of this protocol is described in an independent procedure. The language semantics is based on Communicating Automata with bounded channels. Programs are compiled into TVL IR, an intermediate representation that is a flat control flow graph where complex constructs like loops and branching are replaced with direct transitions.
+TVL is a small DSL designed to create models of communication protocols. Each actor of this protocol is described in an independent procedure. The language semantics is based on Communicating Automata with bounded channels.
 
-The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending (`send`) and receiving (`receive`) mutate the global state of these queues, while ensuring properties such as `MAX_QUEUE_SIZE` invariants are met.
+The state of the system is primarily characterized by message queues between actors, with messages acting as atomic tokens. Operations like sending and receiving a message mutate the global state of these queues.
 
-TVL also provides means for property verification through specifications block (`specs`). It supports custom `ltl` and `ctl` formulas using labels, as well as template-based properties (like `FinishingProperty` or `MsgDeliveredProperty`) and implicitly generated label-based specifications.
+TVL also provides means for property verification through [specifications block](docs/specifications). It supports custom **`ltl`** and **`ctl`** formulas using user-defined labels, as well as template-based properties and implicitly generated label-based specifications.
 
-The generated TVL IR is translated into a target model checker language (like TLA+ or Spin) to perform the actual verification. Also, there is an ongoing work to build a native TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
+Models in TVL are first compiled into TVL IR, which is a bit lower-level intermediate representation. Next, the generated IR is translated into a target model checker language to perform the actual verification. Also, there is an ongoing work on a TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
 
-For more deep and formal theoretical background on how execution and configurations are defined, check out the documentation on semantics in `docs/semantics`:
+There are two formal semantics for TVL language:
 - [Operational semantics](docs/semantics/operational_en.md)
 - [Kripke structures](docs/semantics/kripke_en.md)
 
@@ -31,15 +31,18 @@ For more deep and formal theoretical background on how execution and configurati
 ### Using Docker (Recommended)
 You can use the provided Dockerfile to easily set up an environment with all prerequisites installed.
 
-To build the Docker image (pass your host UID/GID — the image creates a `dev` user with them):
+To build the Docker image:
+
 ```shell
 docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) -t tvl-env .
 ```
 
 To run the container interactively with your local repository mounted:
+
 ```shell
 docker run -it --user dev -v $(pwd):/app tvl-env
 ```
+
 Inside the container, you will have access to `java`, `sbt`, `spin`, and TLA+ tools (`tlc`, `pcal`). The ANTLR jar is available at `$ANTLR_JAR`.
 
 ### Building from scratch for the first time
@@ -50,13 +53,34 @@ sbt compile
 
 ### Usage
 ```
-translate <input file> <target>
+translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]
 ```
+- `<target>` is `tla` or `spin`, or `ir` (no verification is run)
+- `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
+- `--channel-size` / `--trace-size` set the channel size and counterexample size limits
+- The output file is always written next to the input file
+
 Altough it is highly recommended to use [VS Code plugin](https://github.com/ArsenyBochkarev/tvl-vscode).
 
 ### Supported targets
 - TLA+ (initial translation made to PlusCal)
 - SPIN
+- TVL IR
+
+#### TVL IR output
+The TVL IR is a standalone, serializable artifact decoupled from the TVL source. It can be dumped in the `.tvir` text format either frontend-only:
+
+```bash
+./translate src/model.tvl ir  # writes src/model.tvir
+```
+
+or alongside a normal target run:
+
+```bash
+./translate src/model.tvl tla --dump-ir=out/model.tvir
+```
+
+This is the intended entry point for external backends such as [Curtis](https://github.com/ArsenyBochkarev/Curtis).
 
 ### Run tests
 You can run all tests using:
@@ -75,7 +99,7 @@ If you want to run specific test suites, you can use the separate configurations
    ```
    sbt correctness:test
    ```
-   *Note: If you modify the IR generation or add new examples, you can re-generate the golden `.tvir` output files by setting the `UPDATE_GOLDEN_FILES` environment variable. E.g.:*
+   *Note: In case of IR generation modifications or new examples addition, one can re-generate the golden `.tvir` output files by setting the `UPDATE_GOLDEN_FILES` environment variable. E.g.:*
    ```
    UPDATE_GOLDEN_FILES=1 sbt correctness:test
    ```

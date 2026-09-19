@@ -1,16 +1,21 @@
 #!/bin/bash
 
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-  echo "Usage: ./translate <input_file> <target>"
+  echo "Usage: ./translate <input_file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]"
   echo ""
   echo "Arguments:"
-  echo "  <input_file>          Path to the source TVL file."
-  echo "  <target>              Target model checker. Options: 'tla', 'spin'."
-  echo "  --channel-size=...    (Optional) Channel size limit. Default: 20."
-  echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20."
+  echo "  <input_file>          Path to the source TVL file. Output is written next to it."
+  echo "  <target>              Translation target: 'tla' or 'spin' (model checker), or 'ir'"
+  echo "                        (frontend-only: write the TVL IR in .tvir text format,"
+  echo "                        see docs/IR/IR.md; no verification is run)."
+  echo "  --dump-ir=...         (Optional) Additionally dump the TVL IR (.tvir text format) to this path."
+  echo "  --channel-size=...    (Optional) Channel size limit. Default: 20. (Ignored for 'ir'.)"
+  echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20. (Ignored for 'ir'.)"
   echo ""
   echo "Example:"
-  echo "  ./translate src/model.tvl out/model.tla tla --channel-size=10"
+  echo "  ./translate src/model.tvl tla --channel-size=10"
+  echo "  ./translate src/model.tvl ir"
+  echo "  ./translate src/model.tvl tla --dump-ir=out/model.tvir"
   exit 0
 fi
 
@@ -25,6 +30,8 @@ TARGET=$2
 # Construct output file name
 if [[ "$TARGET" == "tla" ]]; then
   EXT="tla"
+elif [[ "$TARGET" == "ir" ]]; then
+  EXT="tvir"
 else
   EXT="pml"
 fi
@@ -35,6 +42,7 @@ OUTPUT="$DIR/${BASE}.${EXT}"
 
 CHANNEL_SIZE=20
 TRACE_SIZE=20
+DUMP_IR="-"
 
 shift 2
 while [[ $# -gt 0 ]]; do
@@ -44,6 +52,13 @@ while [[ $# -gt 0 ]]; do
       ;;
     --trace-size=*)
       TRACE_SIZE="${1#--trace-size=}"
+      ;;
+    --dump-ir=*)
+      DUMP_IR="${1#--dump-ir=}"
+      if [[ -z "$DUMP_IR" ]]; then
+        echo "Error: --dump-ir requires a value."
+        exit 1
+      fi
       ;;
     *)
       echo "Unknown option: $1"
@@ -55,10 +70,18 @@ done
 
 export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
 
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE"
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE $DUMP_IR"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1
+fi
+
+if [[ "$TARGET" == "ir" ]]; then
+  echo "TVL IR written to $OUTPUT"
+  if [[ "$DUMP_IR" != "-" ]]; then
+    echo "TVL IR written to $DUMP_IR"
+  fi
+  exit 0
 fi
 
 MAP_PATH="$DIR/${BASE}.map.json"

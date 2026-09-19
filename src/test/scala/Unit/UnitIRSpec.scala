@@ -19,11 +19,7 @@ class UnitIRSpec extends AnyFunSuite {
       val res = FrontendPipeline.run(cs, debug = false)
 
       // Convert IR to a string format for easy regex matching
-      val irString = res.ir.toList.sortBy(_._1).map { case (actor, instrs) =>
-        s"Actor: $actor\n" + instrs.toList.sortBy(_._1).map { case (id, instr) =>
-          s"  $id: $instr"
-        }.mkString("\n")
-      }.mkString("\n\n")
+      val irString = res.toActorsTvirString
 
       tc.expectedPatterns.foreach { patternStr =>
         val regex = new Regex(patternStr)

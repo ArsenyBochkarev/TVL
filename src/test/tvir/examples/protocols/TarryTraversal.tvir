@@ -120,3 +120,14 @@ Actor: D
   74: IRQueuePop(74,113,(-1,-1),75,Q[D][A],TOK)
   75: IRQueuePush(75,114,(-1,-1),76,Q[C][D],TOK)
   76: IRJump(76,105,(-1,-1),68)
+
+Template specs:
+  MsgDeliveredProperty
+  ValidityProperty
+
+User specs:
+  ltl Correctness: A.ACTOR_END -> (B.ACTOR_END && C.ACTOR_END && D.ACTOR_END)
+
+Labels:
+  A.decide: 53
+  C.done: 119

@@ -17,3 +17,14 @@ Actor: Worker
   9: IRQueuePush(9,8,(-1,-1),10,Q[Supervisor][Worker],Ping)
   10: IRJump(10,6,(-1,-1),8)
   11: IRJump(11,6,(-1,-1),8)
+
+Template specs:
+  RecoveryProperty
+
+User specs:
+  ltl RecoveryProperty_Worker_fail_crash_0: [] (Worker.fail_crash -> <> Worker.start_recovery)
+
+Labels:
+  Worker.fail_crash: 6
+  Worker.init: 1
+  Worker.start_recovery: 9

@@ -94,3 +94,7 @@ __tlacache__
 
 ### TVL mappings ###
 *.map.json
+
+### TVL IR dumps ###
+*.tvir
+!src/test/tvir/**/*.tvir

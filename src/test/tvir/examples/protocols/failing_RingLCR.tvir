@@ -145,3 +145,23 @@ Actor: R4
   173: IRQueuePush(173,130,(-1,-1),174,Q[R1][R4],Stop)
   174: IRJump(174,130,(-1,-1),159)
   176: IRJump(176,121,(-1,-1),161)
+
+User specs:
+  ltl LeaderElected: G ((R1.snt || R2.snt || R3.snt || R4.snt) -> F (R1.me || R2.me || R3.me || R4.me))
+  ltl MaxIdWins: G (R4.snt -> F R4.me)
+  ltl ProtocolFinishes: G ((R1.snt || R2.snt || R3.snt || R4.snt) -> F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END && R4.ACTOR_END))
+  ltl SingleLeader: G ((R1.me -> (!R2.me && !R3.me && !R4.me)) && (R2.me -> (!R1.me && !R3.me && !R4.me)) && (R3.me -> (!R1.me && !R2.me && !R4.me)) && (R4.me -> (!R1.me && !R2.me && !R3.me)))
+
+Labels:
+  R1.me: 11
+  R1.nme: 23
+  R1.snt: 3
+  R2.me: 57
+  R2.nme: 67
+  R2.snt: 47
+  R3.me: 103
+  R3.nme: 111
+  R3.snt: 91
+  R4.me: 149
+  R4.nme: 155
+  R4.snt: 135

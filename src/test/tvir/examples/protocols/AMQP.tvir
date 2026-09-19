@@ -95,3 +95,14 @@ Actor: PayProcessor
   108: IRJump(108,90,(-1,-1),105)
   109: IRJump(109,98,(-1,-1),88)
   111: IRJump(111,79,(-1,-1),90)
+
+Template specs:
+  LossDetectionProperty
+  MsgDeliveredProperty
+
+User specs:
+  ltl LossDetection_PayProcessor_expired_msg_recovery_0: [] (PayProcessor.expired_msg_recovery -> <>(Client1.recovery_loss_detected))
+
+Labels:
+  Client1.recovery_loss_detected: 12
+  PayProcessor.expired_msg_recovery: 93

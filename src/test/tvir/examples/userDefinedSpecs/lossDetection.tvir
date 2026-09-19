@@ -16,3 +16,13 @@ Actor: Sender
   8: IRJump(8,4,(-1,-1),1)
   9: IRJump(9,5,(-1,-1),8)
   10: IRJump(10,5,(-1,-1),8)
+
+Template specs:
+  LossDetectionProperty
+
+User specs:
+  ltl LossDetection_Sender_expired_msg_Data_0: [] (Sender.expired_msg_Data -> <>(Receiver.Data_loss_detected))
+
+Labels:
+  Receiver.Data_loss_detected: 18
+  Sender.expired_msg_Data: 7

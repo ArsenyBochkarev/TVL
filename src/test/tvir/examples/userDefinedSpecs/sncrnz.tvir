@@ -16,3 +16,10 @@ Actor: R3
   14: IRJump(14,15,(-1,-1),11)
   15: IRSkip(15,17,(-1,-1),16)
   16: IRJump(16,15,(-1,-1),11)
+
+User specs:
+  ltl R2EndsR3: [] (R2.R2Receive -> <> (R3.R3Break))
+
+Labels:
+  R2.R2Receive: 4
+  R3.R3Break: 12

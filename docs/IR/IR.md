@@ -3,7 +3,7 @@
 ## General
 *   **IR Type**: Instruction-based control flow graph. The program is divided into independent procedures for each actor.
 *   **Abstraction Level**: Medium. The IR sits between the AST and target model checkers' input languages. Complex constructs (like loops or branching) are represented as a flat graph with explicit transitions (Jump, Branch, Choice). The IR is stripped of syntactic sugar.
-*   **Format**: Object data structure in Scala. Represented as a map linking an actor's name to its instruction graph: `mutable.Map[String, mutable.Map[Int, IRInstruction]]`. Each instruction has a unique integer identifier. Separation of the IR from the source code is a TODO.
+*   **Format**: Object data structure in Scala. Represented as a map linking an actor's name to its instruction graph: `mutable.Map[String, mutable.Map[Int, IRInstruction]]`. Each instruction has a unique integer identifier. The IR is a standalone artifact decoupled from the TVL source: it can be serialized to the line-oriented `.tvir` text format (see the next section) via `./translate <input> ir` (frontend-only) or `--dump-ir=<path>` alongside a `tla`/`spin` run.
 *   **Differences from TVL**: To simplify the translation process, the IR explicitly introduces the abstraction of message queues, replaces structured control flow with direct jumps, and creates explicit variable counters for countable loops.
 
 ## IR instructions
@@ -108,3 +108,37 @@ The following verification and correctness invariants apply within the IR:
 *   **Queue sizes**: The `IRQueuePush` operation implicitly depends on the channel size invariant (`MAX_QUEUE_SIZE`). If a queue is overflowing, the execution halts.
 *   **`parallel` nesting**: In accordance with the language semantics, a `parallel` instruction inside another `parallel` construct is **forbidden**. The `scheduler` attribute does not support a stack of concurrency scopes; it only stores a flat tuple for the current block.
 *   **Scheduler creation**:  Targets should support scheduler creation at the PC of `IRParallelExec` instruction.
+
+## `.tvir` text format
+### Structure
+A document is the **actors part** followed by optional **sections** in a fixed order:
+
+```
+actorsPart          = actorBlock (blank line actorBlock)*
+actorBlock          = "Actor: <name>" instructionLine+
+instructionLine     = "  " id ": " IRInstruction     // two-space indent, instructions sorted by id
+
+"Template specs:"   = one "  <PropertyName>" per line, sorted
+"User specs:"       = one "  <logic> <name>: <formula>" per line, sorted by (name, formula)
+"Labels:"           = one "  <actor>.<label>: <instructionId>" per line, sorted by (actor, label)
+```
+
+### Example
+Tail of the dump for `examples/userDefinedSpecs/sncrnz.tvl`:
+```
+Actor: R1
+  1: IRQueuePush(1,4,(-1,-1),2,Q[R3][R1],Y)
+  2: IRQueuePush(2,5,(-1,-1),3,Q[R2][R1],X)
+  3: IREnd(3,6,(-1,-1))
+
+Actor: R2
+  4: IRQueuePop(4,9,(-1,-1),5,Q[R2][R1],X)
+  ...
+
+User specs:
+  ltl R2EndsR3: [] (R2.R2Receive -> <> (R3.R3Break))
+
+Labels:
+  R2.R2Receive: 4
+  R3.R3Break: 12
+```

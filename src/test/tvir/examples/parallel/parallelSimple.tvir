@@ -22,3 +22,6 @@ Actor: R3
 Actor: R4
   17: IRQueuePop(17,25,(-1,-1),18,Q[R4][R3],Z)
   18: IREnd(18,26,(-1,-1))
+
+Template specs:
+  AllTemplateProperties

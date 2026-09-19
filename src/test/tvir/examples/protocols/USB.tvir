@@ -25,3 +25,12 @@ Actor: UDev
   7: IRJump(7,4,(-1,-1),1)
   8: IRJump(8,5,(-1,-1),7)
   9: IRJump(9,5,(-1,-1),7)
+
+User specs:
+  ltl NotifyAfterMount: [] (Automount.mount_ok -> <> FileManager.gui_notify)
+
+Labels:
+  Automount.ignore: 18
+  Automount.mount_ok: 17
+  FileManager.gui_notify: 28
+  UDev.detected: 5

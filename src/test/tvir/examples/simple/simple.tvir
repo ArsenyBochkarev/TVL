@@ -21,3 +21,15 @@ Actor: R3
   20: IRJump(20,20,(-1,-1),17)
   21: IRSkip(21,22,(-1,-1),22)
   22: IRJump(22,20,(-1,-1),17)
+
+Template specs:
+  FinishingProperty
+  RecoveryProperty
+
+User specs:
+  ltl FinishDuplicate: F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END)
+  ltl RecoveryProperty_R2_fail_send_0: [] (R2.fail_send -> <> R2.start_send)
+
+Labels:
+  R2.fail_send: 7
+  R2.start_send: 10

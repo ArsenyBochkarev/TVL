@@ -61,8 +61,8 @@ class ASTVisitor(val debug: Boolean = false) {
     // Some of them will be transformed into user-defined ones
     var lossDetectionPropertySet = false
     val lossDetectionPropertyEnabled = templateSpecs.contains("LossDetectionProperty")
-    labels.foreach { (actor, actorLabels) =>
-      val labelNames = actorLabels.keys.toList
+    labels.toList.sortBy(_._1).foreach { (actor, actorLabels) =>
+      val labelNames = actorLabels.keys.toList.sorted
 
       // Recovery property: [] (fail_i -> <> start_i)
       val recoveryPropertyEnabled = templateSpecs.contains("RecoveryProperty")
@@ -90,9 +90,9 @@ class ASTVisitor(val debug: Boolean = false) {
       var lossDetectNum = 0
       expiredLabels.foreach { expLabel =>
         val msgName = expLabel.stripPrefix("expired_msg_")
-        labels.foreach { (otherActor, otherActorLabels) =>
+        labels.toList.sortBy(_._1).foreach { (otherActor, otherActorLabels) =>
           if (otherActor != actor)
-            val otherActorLabelNames = otherActorLabels.keys.toList
+            val otherActorLabelNames = otherActorLabels.keys.toList.sorted
             val lossDetectLabels = otherActorLabelNames.filter(_.endsWith("_loss_detected"))
             lossDetectLabels.filter(_.equals(s"${msgName}_loss_detected")).foreach { ldLabel =>
               if (lossDetectionPropertyEnabled)

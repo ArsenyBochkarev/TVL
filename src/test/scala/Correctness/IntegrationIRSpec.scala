@@ -33,11 +33,7 @@ class IntegrationIRSpec extends AnyFunSuite {
       val res = FrontendPipeline.run(cs, debug = false)
 
       // Convert IR to string format
-      val irString = res.ir.toList.sortBy(_._1).map { case (actor, instrs) =>
-        s"Actor: $actor\n" + instrs.toList.sortBy(_._1).map { case (id, instr) =>
-          s"  $id: $instr"
-        }.mkString("\n")
-      }.mkString("\n\n") + "\n"
+      val irString = res.toTvirString
 
       if (Files.exists(irFilePath)) {
         val expectedIrString = Files.readString(irFilePath)

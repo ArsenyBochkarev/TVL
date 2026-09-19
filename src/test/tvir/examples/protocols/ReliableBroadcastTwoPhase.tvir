@@ -297,3 +297,36 @@ Actor: N4
   410: IRQueuePush(410,304,(-1,-1),411,Q[N3][N4],VOTE)
   411: IRJump(411,305,(-1,-1),393)
   413: IRJump(413,288,(-1,-1),395)
+
+User specs:
+  ltl Agreement: G (N1.ACTOR_END -> F (N2.ACTOR_END && N3.ACTOR_END && N4.ACTOR_END))
+
+Labels:
+  N1.after_vote: 23
+  N1.snt: 1
+  N1.wait_deliver: 45
+  N1.wait_echo1: 6
+  N1.wait_echo3: 10
+  N1.wait_vote1: 7
+  N1.wait_vote2: 71
+  N2.after_vote: 122
+  N2.start_echo: 101
+  N2.start_vote: 102
+  N2.wait_deliver: 144
+  N2.wait_echo1: 107
+  N2.wait_echo2: 109
+  N2.wait_vote2: 170
+  N3.after_vote: 227
+  N3.start_echo: 206
+  N3.start_vote: 207
+  N3.wait_deliver: 249
+  N3.wait_echo1: 212
+  N3.wait_echo2: 214
+  N3.wait_vote2: 275
+  N4.after_vote: 332
+  N4.start_echo: 311
+  N4.start_vote: 312
+  N4.wait_deliver: 354
+  N4.wait_echo1: 317
+  N4.wait_echo2: 319
+  N4.wait_vote2: 380
