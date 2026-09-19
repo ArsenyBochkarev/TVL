@@ -18,7 +18,7 @@ class Promela extends TargetTranslator {
   private var msgDeliveredProperties: List[String] = List.empty[String]
   override def getMsgDeliveredProperty: String =
     if (!isPropEnabled("MsgDeliveredProperty") || msgDeliveredProperties.isEmpty) ""
-    else "ltl MessageDeliveredProperty { " + msgDeliveredProperties.mkString(s" && ") + " }"
+    else "ltl MsgDeliveredProperty { " + msgDeliveredProperties.mkString(s" && ") + " }"
   private var channels: List[String] = List.empty[String]
   override def getValidityProperty: String =
     if (!isPropEnabled("ValidityProperty") || finishedProperties.isEmpty || channels.isEmpty) ""
@@ -298,4 +298,12 @@ class Promela extends TargetTranslator {
     println("Error: CTL is not supported for PlusCal target")
     System.exit(1)
     ""
+
+  override def generateTemplateSpecs: String = {
+    val sb = new StringBuilder()
+    sb.append(getFinishingProperty+"\n")
+    sb.append(getMsgDeliveredProperty+"\n")
+    sb.append(getValidityProperty+"\n")
+    sb.toString()
+  }
 }
