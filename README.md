@@ -33,14 +33,14 @@ For more deep and formal theoretical background on how execution and configurati
 ### Using Docker (Recommended)
 You can use the provided Dockerfile to easily set up an environment with all prerequisites installed.
 
-To build the Docker image:
+To build the Docker image (pass your host UID/GID — the image creates a `dev` user with them):
 ```shell
-docker build -t tvl-env .
+docker build --build-arg UID=$(id -u) --build-arg GID=$(id -g) -t tvl-env .
 ```
 
 To run the container interactively with your local repository mounted:
 ```shell
-docker run -it -v $(pwd):/app tvl-env
+docker run -it --user dev -v $(pwd):/app tvl-env
 ```
 Inside the container, you will have access to `java`, `sbt`, `spin`, and TLA+ tools (`tlc`, `pcal`). The ANTLR jar is available at `$ANTLR_JAR`.
 

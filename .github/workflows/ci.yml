@@ -13,6 +13,14 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Detect runner user
+        # The image's dev user must match the workspace owner on the runner,
+        # otherwise dev cannot write into the mounted repository
+        id: usr
+        run: |
+          echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"
+          echo "gid=$(id -g)" >> "$GITHUB_OUTPUT"
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
@@ -25,10 +33,13 @@ jobs:
           tags: tvl-env:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            UID=${{ steps.usr.outputs.uid }}
+            GID=${{ steps.usr.outputs.gid }}
 
       - name: Build in Docker
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+          docker run --rm --user dev -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
             sbt compile
           "
@@ -38,6 +49,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Detect runner user
+        # The image's dev user must match the workspace owner on the runner,
+        # otherwise dev cannot write into the mounted repository
+        id: usr
+        run: |
+          echo "uid=$(id -u)" >> "$GITHUB_OUTPUT"
+          echo "gid=$(id -g)" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -51,22 +70,25 @@ jobs:
           tags: tvl-env:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          build-args: |
+            UID=${{ steps.usr.outputs.uid }}
+            GID=${{ steps.usr.outputs.gid }}
 
       - name: Test target generation in Docker
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+          docker run --rm --user dev -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
             sbt target:test
           "
       - name: Test integration correctness in Docker
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+          docker run --rm --user dev -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
             sbt correctness:test
           "
       - name: Test unit IR generation in Docker
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
+          docker run --rm --user dev -v ${{ github.workspace }}:/app -w /app tvl-env /bin/bash -c "
             java -jar \$ANTLR_JAR -visitor -no-listener -Dlanguage=Java ./src/main/scala/Grammar/TVL.g4 &&
             sbt unit:test
           "
