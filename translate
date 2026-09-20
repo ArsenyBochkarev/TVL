@@ -4,7 +4,8 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "Usage: ./translate <input_file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]"
   echo ""
   echo "Arguments:"
-  echo "  <input_file>          Path to the source TVL file. Output is written next to it."
+  echo "  <input_file>          Path to the source TVL file or a TVL IR dump (.tvir)."
+  echo "                        Output is written next to it."
   echo "  <target>              Translation target: 'tla' or 'spin' (model checker), or 'ir'"
   echo "                        (frontend-only: write the TVL IR in .tvir text format,"
   echo "                        see docs/IR/IR.md; no verification is run)."
@@ -16,6 +17,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  ./translate src/model.tvl tla --channel-size=10"
   echo "  ./translate src/model.tvl ir"
   echo "  ./translate src/model.tvl tla --dump-ir=out/model.tvir"
+  echo "  ./translate src/model.tvir tla"
   exit 0
 fi
 
@@ -37,6 +39,7 @@ else
 fi
 DIR=$(dirname "$INPUT")
 BASE=$(basename "$INPUT" .tvl)
+BASE=${BASE%.tvir}
 OUTPUT="$DIR/${BASE}.${EXT}"
 
 
@@ -85,4 +88,9 @@ if [[ "$TARGET" == "ir" ]]; then
 fi
 
 MAP_PATH="$DIR/${BASE}.map.json"
-python3 verifier.py $TARGET $OUTPUT $INPUT $MAP_PATH $TRACE_SIZE
+# IR line numbers refer to the original .tvl: use the sibling source for traces when verifying from .tvir
+SOURCE_FILE="$INPUT"
+if [[ "$INPUT" == *.tvir ]]; then
+  SOURCE_FILE="${INPUT%.tvir}.tvl"
+fi
+python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE

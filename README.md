@@ -55,6 +55,7 @@ sbt compile
 ```
 translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]
 ```
+- `<input file>` is a TVL source (`.tvl`) or a TVL IR dump (`.tvir`)
 - `<target>` is `tla` or `spin`, or `ir` (no verification is run)
 - `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
 - `--channel-size` / `--trace-size` set the channel size and counterexample size limits
@@ -67,7 +68,7 @@ Altough it is highly recommended to use [VS Code plugin](https://github.com/Arse
 - SPIN
 - TVL IR
 
-#### TVL IR output
+#### TVL IR
 The TVL IR is a standalone, serializable artifact decoupled from the TVL source. It can be dumped in the `.tvir` text format either frontend-only:
 
 ```bash
@@ -80,7 +81,13 @@ or alongside a normal target run:
 ./translate src/model.tvl tla --dump-ir=out/model.tvir
 ```
 
-This is the intended entry point for external backends such as [Curtis](https://github.com/ArsenyBochkarev/Curtis).
+A `.tvir` file can also be used as an input instead of the TVL source: it is parsed back into the IR (no TVL parsing involved) and then translated and verified exactly like a `.tvl` input:
+
+```bash
+./translate src/model.tvir tla  # writes src/model.tla
+```
+
+IR line numbers refer to the original TVL source, so counterexample traces for a `.tvir` input are rendered against the sibling `model.tvl` if it is present. See [docs/IR/IR.md](docs/IR/IR.md) for the format details.
 
 ### Run tests
 You can run all tests using:

@@ -28,4 +28,5 @@ specs {
     FinishingProperty;
     RecoveryProperty;
     ltl FinishDuplicate: "F (R1.ACTOR_END && R2.ACTOR_END && R3.ACTOR_END)";
+    ctl CanFinish: "AG (R2.start_send -> EF R3.ACTOR_END)";
 }

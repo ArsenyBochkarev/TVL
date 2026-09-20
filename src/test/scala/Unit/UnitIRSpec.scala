@@ -19,7 +19,7 @@ class UnitIRSpec extends AnyFunSuite {
       val res = FrontendPipeline.run(cs, debug = false)
 
       // Convert IR to a string format for easy regex matching
-      val irString = res.toActorsTvirString
+      val irString = res.toActorsTVIRString
 
       tc.expectedPatterns.foreach { patternStr =>
         val regex = new Regex(patternStr)

@@ -1,4 +1,5 @@
 import Translator.*
+import Translator.Frontend.{FrontendResult, TVIRReader, TVIRParseException}
 import Translator.Target.{TargetTranslator, *}
 import org.antlr.v4.runtime.CharStreams
 
@@ -12,22 +13,36 @@ def writeFile(path: String, content: String): Unit = {
   Files.writeString(Path.of(path), content)
 }
 
-def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int): Unit = {
-  if target == "ir" then
-    // Dump the IR, skip target codegen, source mapping and verification
-    val res = FrontendPipeline.run(CharStreams.fromFileName(input), debug)
-    writeFile(output, res.toTvirString)
-    if dumpIrPath != "-" then writeFile(dumpIrPath, res.toTvirString)
-    return
+/** Single source-selection point: a .tvir input is read back into a FrontendResult
+  * (no ANTLR parsing); anything else goes through the TVL frontend */
+def loadFrontendResult(input: String, debug: Boolean): FrontendResult = {
+  try
+    if input.endsWith(".tvir") then TVIRReader.fromTVIRString(Files.readString(Path.of(input)))
+    else FrontendPipeline.run(CharStreams.fromFileName(input), debug)
+  catch
+    case e: TVIRParseException =>
+      println(e.getMessage)
+      System.exit(1)
+      null // unreachable, same pattern as PlusCal.formatCTL
+}
 
-  if !targetIsValid(target) then
+def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int): Unit = {
+  val isIrTarget = target == "ir"
+  if !isIrTarget && !targetIsValid(target) then
     println(s"Error: Invalid target \"$target\". Use \"tla\", \"spin\" or \"ir\"")
     System.exit(1)
 
-  val cs = CharStreams.fromFileName(input)
-  val res = FrontendPipeline.run(cs, debug)
+  val res = loadFrontendResult(input, debug)
 
-  if dumpIrPath != "-" then writeFile(dumpIrPath, res.toTvirString)
+  if isIrTarget then
+    // Dump the IR (for a .tvir input this is a validated, canonicalized round-trip),
+    // skip target codegen, source mapping and verification
+    writeFile(output, res.toTVIRString)
+    if dumpIrPath != "-" then writeFile(dumpIrPath, res.toTVIRString)
+    return
+
+  // The IR is a frontend artifact: dump it even if the target codegen below fails
+  if dumpIrPath != "-" then writeFile(dumpIrPath, res.toTVIRString)
 
   val translator: TargetTranslator = target match {
     case "spin" => new Promela()

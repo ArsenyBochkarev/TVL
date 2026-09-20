@@ -142,3 +142,6 @@ Labels:
   R2.R2Receive: 4
   R3.R3Break: 12
 ```
+
+### `.tvir` as an input
+The frontend reconstructs the full pipeline input from `.tvir` text, so a dump can replace the TVL source: `./translate model.tvir tla` should produce same results as `./translate model.tvl tla`. The `./translate model.tvir ir` command re-emits the canonical form (entry order within sections is not enforced on input and is normalized on re-dump).

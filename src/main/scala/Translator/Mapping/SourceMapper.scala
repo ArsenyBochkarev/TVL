@@ -11,9 +11,9 @@ class SourceMapper {
     mapping(label) = line
   }
 
-  // Saves to *.map.json file in the same directory as the source file
+  // Saves to *.map.json file in the same directory as the source file (.tvl or .tvir)
   def saveMapping(targetFilePath: String): Unit = {
-    val mapPath = targetFilePath.stripSuffix(".tvl") + ".map.json"
+    val mapPath = targetFilePath.stripSuffix(".tvl").stripSuffix(".tvir") + ".map.json"
 
     val jsonEntries = mapping.map { case (label, line) =>
       s"""  "$label": $line"""

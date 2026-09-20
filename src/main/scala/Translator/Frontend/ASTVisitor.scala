@@ -15,7 +15,9 @@ class ASTVisitor(val debug: Boolean = false) {
   private val receiveMap = mutable.Map[/*actor name=*/String, mutable.Map[/*label name*/String, /*instruction id*/Int]]()
   def getLabels: Map[String, Map[String, Int]] = labels.map(kv => kv._1 -> kv._2.toMap).toMap
   private val userSpecs = mutable.ListBuffer[UserSpec]()
-  def getUserSpecs: List[UserSpec] = userSpecs.toList
+  // Sorted like the .tvir dump: spec order is not meaningful, and the canonical order
+  // makes a .tvl run and its .tvir round-trip produce identical target output
+  def getUserSpecs: List[UserSpec] = userSpecs.toList.sortBy(s => (s.name, s.formula))
   private val templateSpecs = mutable.ListBuffer[String]()
   def getTemplateSpecs: List[String] = templateSpecs.toList
 

@@ -7,7 +7,7 @@ import org.scalatest.funsuite.AnyFunSuite
 /**
  * Unit tests for the shared .tvir serializer
  */
-class UnitTvirFormatSpec extends AnyFunSuite {
+class UnitTVIRFormatSpec extends AnyFunSuite {
 
   test("no specs/labels: extended dump equals actors-only dump") {
     val tvl =
@@ -18,7 +18,7 @@ class UnitTvirFormatSpec extends AnyFunSuite {
 
     val res = FrontendPipeline.run(CharStreams.fromString(tvl), debug = false)
 
-    assert(res.toTvirString == res.toActorsTvirString,
+    assert(res.toTVIRString == res.toActorsTVIRString,
       "Extended .tvir dump must be byte-identical to the actors-only dump when there are no specs and no labels")
   }
 
@@ -46,10 +46,10 @@ class UnitTvirFormatSpec extends AnyFunSuite {
       "\nUser specs:\n  ltl Delivered: [] (A.sent -> <> B.BStart)\n" +
       "\nLabels:\n  A.sent: 3\n  B.BStart: 1\n"
 
-    assert(res.toTvirString == res.toActorsTvirString + expectedSuffix,
+    assert(res.toTVIRString == res.toActorsTVIRString + expectedSuffix,
       s"""|Extended .tvir dump must append the sections after the unchanged actors part.
           |
           |Generated:
-          |${res.toTvirString}""".stripMargin)
+          |${res.toTVIRString}""".stripMargin)
   }
 }

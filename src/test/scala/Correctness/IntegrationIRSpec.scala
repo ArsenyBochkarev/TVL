@@ -33,7 +33,7 @@ class IntegrationIRSpec extends AnyFunSuite {
       val res = FrontendPipeline.run(cs, debug = false)
 
       // Convert IR to string format
-      val irString = res.toTvirString
+      val irString = res.toTVIRString
 
       if (Files.exists(irFilePath)) {
         val expectedIrString = Files.readString(irFilePath)

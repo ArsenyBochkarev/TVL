@@ -8,7 +8,7 @@ case class FrontendResult(ir: mutable.Map[String, mutable.Map[Int, IRInstruction
                           userSpecs: List[UserSpec], labels: Map[String, Map[String, Int]]) {
 
   /** Actors + instructions only */
-  def toActorsTvirString: String =
+  def toActorsTVIRString: String =
     ir.toList.sortBy(_._1).map { case (actor, instrs) =>
       s"Actor: $actor\n" + instrs.toList.sortBy(_._1).map { case (id, instr) =>
         s"  $id: $instr"
@@ -16,8 +16,8 @@ case class FrontendResult(ir: mutable.Map[String, mutable.Map[Int, IRInstruction
     }.mkString("\n\n") + "\n"
 
   /** Full extended .tvir file */
-  def toTvirString: String =
-    toActorsTvirString + List(templateSpecsSection, userSpecsSection, labelsSection).flatten.mkString
+  def toTVIRString: String =
+    toActorsTVIRString + List(templateSpecsSection, userSpecsSection, labelsSection).flatten.mkString
 
   private def templateSpecsSection: Option[String] =
     Option.when(templateSpecs.nonEmpty)(
