@@ -3,9 +3,10 @@ FROM ubuntu:22.04
 # Prevent interactive prompts during apt installations
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Install prerequisites: Java 17, curl, wget, gnupg, spin
+# Install prerequisites: Java 17, curl, wget, gnupg, spin, gcc (spin -a needs a C
+# compiler for preprocessing and for building the pan verifier)
 RUN apt-get update && \
-    apt-get install -y openjdk-17-jdk curl wget gnupg spin unzip git && \
+    apt-get install -y openjdk-17-jdk curl wget gnupg spin unzip git gcc make && \
     rm -rf /var/lib/apt/lists/*
 
 # Install sbt

@@ -13,6 +13,9 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  --dump-ir=...         (Optional) Additionally dump the TVL IR (.tvir text format) to this path."
   echo "  --channel-size=...    (Optional) Channel size limit. Default: 20. (Ignored for 'ir'.)"
   echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20. (Ignored for 'ir'.)"
+  echo "  --trace-json=...      (Optional) Dump the counterexample in the canonical tvl-trace/1"
+  echo "                        JSON format (for trace validation / CEGAR)."
+  echo "  --no-truncate         (Optional) Do not cut the rendered counterexample at --trace-size."
   echo ""
   echo "Example:"
   echo "  ./translate src/model.tvl tla --channel-size=10"
@@ -48,6 +51,8 @@ OUTPUT="$DIR/${BASE}.${EXT}"
 CHANNEL_SIZE=20
 TRACE_SIZE=20
 DUMP_IR="-"
+TRACE_JSON=""
+EXTRA_VERIFIER_ARGS=""
 
 shift 2
 while [[ $# -gt 0 ]]; do
@@ -64,6 +69,16 @@ while [[ $# -gt 0 ]]; do
         echo "Error: --dump-ir requires a value."
         exit 1
       fi
+      ;;
+    --trace-json=*)
+      TRACE_JSON="${1#--trace-json=}"
+      if [[ -z "$TRACE_JSON" ]]; then
+        echo "Error: --trace-json requires a value."
+        exit 1
+      fi
+      ;;
+    --no-truncate)
+      EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --no-truncate"
       ;;
     *)
       echo "Unknown option: $1"
@@ -95,6 +110,10 @@ SOURCE_FILE="$INPUT"
 if [[ "$INPUT" == *.tvir ]]; then
   SOURCE_FILE="${INPUT%.tvir}.tvl"
 fi
+EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --channel-size $CHANNEL_SIZE"
+if [[ -n "$TRACE_JSON" ]]; then
+  EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --trace-json $TRACE_JSON"
+fi
 # The channel size limit is consumed by the curtis checker CLI (--channel-size);
-# the tla/spin codegen already embeds it, and verifier.py ignores the extra arg there
-python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $CHANNEL_SIZE
+# the tla/spin codegen already embeds it, and verifier.py ignores the extra flag there
+python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $EXTRA_VERIFIER_ARGS
