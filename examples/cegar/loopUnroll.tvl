@@ -1,0 +1,19 @@
+module LoopUnroll
+
+actor R1 {
+    send X to R2
+    send X to R2
+    send X to R2
+}
+
+actor R2 {
+    repeat 3 {
+        receive X from R1
+    }
+    done: skip
+}
+
+specs {
+    FinishingProperty;
+    ltl Done: "F R2.done";
+}

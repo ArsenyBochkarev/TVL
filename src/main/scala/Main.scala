@@ -1,4 +1,6 @@
 import Translator.*
+import Translator.Abstraction.*
+import Translator.Abstraction.Json.*
 import Translator.Frontend.{FrontendResult, TVIRReader, TVIRParseException}
 import Translator.Target.{TargetTranslator, *}
 import org.antlr.v4.runtime.CharStreams
@@ -26,13 +28,37 @@ def loadFrontendResult(input: String, debug: Boolean): FrontendResult = {
       null // unreachable, same pattern as PlusCal.formatCTL
 }
 
-def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int): Unit = {
+/** Applies the abstraction sidecar (if any) and writes a machine-readable
+  * report of what was applied next to the output file. */
+def abstractResult(res: FrontendResult, output: String, abstractionFile: String): FrontendResult = {
+  if abstractionFile == "-" then return res
+  val spec = AbstractionSpec.load(abstractionFile)
+  val abs = Abstractor(res, spec)
+  def decisionJson(d: NodeDecision): Json.JValue =
+    Json.JObj(List("actor" -> Json.JStr(d.actor), "node" -> Json.JNum(d.node), "kind" -> Json.JStr(d.kind)))
+  def appliedJson(d: AppliedDecision): Json.JValue =
+    decisionJson(d.decision) match
+      case Json.JObj(fields) => Json.JObj(fields :+ ("inserted" -> Json.JArr(d.inserted.map(Json.JNum.apply))))
+      case other => other
+  writeFile(s"$output.abs.json", Json.print(Json.JObj(List(
+    "format" -> Json.JStr("tvl-abstraction-report/1"),
+    "applied" -> Json.JArr(abs.applied.map(appliedJson)),
+    "refused" -> Json.JArr(abs.refused.map { (d, reason) =>
+      Json.JObj(List("actor" -> Json.JStr(d.actor), "node" -> Json.JNum(d.node),
+        "kind" -> Json.JStr(d.kind), "reason" -> Json.JStr(reason)))
+    }),
+  ))) + "\n")
+  println(s"Abstraction applied: ${abs.applied.size} decision(s), ${abs.refused.size} refused")
+  abs.result
+}
+
+def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int, abstractionFile: String = "-"): Unit = {
   val isIrTarget = target == "ir"
   if !isIrTarget && !targetIsValid(target) then
     println(s"Error: Invalid target \"$target\". Use \"tla\", \"spin\", \"curtis\" or \"ir\"")
     System.exit(1)
 
-  val res = loadFrontendResult(input, debug)
+  val res = abstractResult(loadFrontendResult(input, debug), output, abstractionFile)
 
   if isIrTarget then
     // Dump the IR (for a .tvir input this is a validated, canonicalized round-trip),
@@ -72,7 +98,7 @@ def parse(input: String, output: String, target: String, dumpIrPath: String, deb
 }
 
 @main
-def main(filePath: String, outputFile: String, target: String, channelSizeLimit: Int, dumpIrPath: String): Unit = {
-  parse(filePath, outputFile, target, dumpIrPath, /*debug=*/false, channelSizeLimit)
+def main(filePath: String, outputFile: String, target: String, channelSizeLimit: Int, dumpIrPath: String, abstractionFile: String): Unit = {
+  parse(filePath, outputFile, target, dumpIrPath, /*debug=*/false, channelSizeLimit, abstractionFile)
   System.exit(0)
 }
