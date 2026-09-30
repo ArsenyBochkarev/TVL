@@ -102,6 +102,35 @@ IR line numbers refer to the original TVL source, so counterexample traces for a
 ./translate src/model.tvl curtis  # writes src/model.tvir, verifies it with Curtis
 ```
 
+### CEGAR: abstraction + counterexample validation
+When verification of the full (concrete) model is slow, `cegar.py` drives a
+classical CEGAR loop over the IR: abstract the model with sound
+over-approximations, verify the abstract model with the target model checker,
+validate any counterexample against the concrete model, and refine (un-abstract)
+the culprit node — until the abstract model is verified (which, for sound
+abstractions, implies the concrete one) or a real counterexample is found:
+
+```bash
+python3 cegar.py --model examples/cegar/loopUnroll.tvl --target tla
+python3 cegar.py --model src/model.tvl --target spin --validator curtis
+```
+
+- Abstractions are configured by the `tvl-abstraction/1` sidecar
+  (`<workdir>/abstraction.json`): `auto` kinds (`loop-unroll`: `repeat N` ->
+  nondeterministic loop; `branch-hoist`: `receive alts` -> choice with hoisted
+  consuming pops) plus a `blacklist` that refinement extends each iteration.
+- Validation (against the CONCRETE model, no model checker internals touched):
+  - `tla` → `utils/tlc_loadtrace.py`: native `tlc -loadTrace json` (precise)
+  - `spin` → `utils/spin_monitor.py`: generated observer proctype
+    (over-approximation; a match is confirmed by Curtis)
+  - fallback → `curtis validate model.tvir trace.json` ([Curtis](https://github.com/ArsenyBochkarev/Curtis)
+    trace replay; also confirms lasso loop closure)
+- Counterexamples travel in the canonical `tvl-trace/1` JSON written by
+  `verifier.py --trace-json <file>` (also usable standalone:
+  `./translate model.tvl spin --trace-json=trace.json`).
+- Artifacts and verdicts land in `--workdir` (default `<model dir>/cegar-out`),
+  including a per-iteration history in `report.json`.
+
 ### Run tests
 You can run all tests using:
 ```
