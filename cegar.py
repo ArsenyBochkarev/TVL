@@ -151,15 +151,27 @@ def load_json(path):
         return json.load(f)
 
 
-def culprit_to_concrete_node(verdict, abs_report):
+def culprit_to_concrete_node(verdict, abs_report, trace_steps):
     """Map the trace culprit node to a CONCRETE node id for blacklisting.
 
     Node ids are shared between abstract and concrete IR except for nodes the
     abstraction pass inserted (fresh ids); those are reported per decision in
     the .abs.json, so an inserted culprit refines the decision that created it.
+    A spuriousLoop verdict carries no node (the loop, not a step, failed): fall
+    back to the LAST trace step executed at an abstracted node — the loop the
+    concrete model cannot realize lives around there.
     """
     node, actor = verdict.get("node"), verdict.get("actor")
     if node is None:
+        abstracted = [(d["actor"], d["node"], d.get("inserted", []))
+                      for d in abs_report.get("applied", [])]
+        for st in reversed(trace_steps):
+            n = st.get("node")
+            if n is None:
+                continue
+            for a, dn, inserted in abstracted:
+                if (st.get("actor") == a and n == dn) or n in inserted:
+                    return a, dn
         return None, None
     for d in abs_report.get("applied", []):
         if d.get("actor") == actor and node in d.get("inserted", []):
@@ -255,7 +267,8 @@ def main():
             return 1
 
         # spurious: refine at the culprit node
-        actor, node = culprit_to_concrete_node(verdict, abs_report)
+        trace_steps = load_json(trace_json).get("steps", [])
+        actor, node = culprit_to_concrete_node(verdict, abs_report, trace_steps)
         reason = f"spurious at iter {it}, step {verdict.get('step')}"
         history.append({"iteration": it, "verdict": "spurious",
                         "step": verdict.get("step"), "actor": actor, "node": node})

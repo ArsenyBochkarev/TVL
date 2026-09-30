@@ -102,7 +102,7 @@ def write_trace_json(path, target, model_file, prop, kind, steps, loop_start_ind
         "kind": kind,
         "channel_size": channel_size,
         "steps": [{"index": i + 1, "actor": s["actor"], "node": s.get("node"),
-                   "action": s["action"]} for i, s in enumerate(steps)],
+                   "next": s.get("next"), "action": s["action"]} for i, s in enumerate(steps)],
     }
     if loop_start_index is not None:
         doc["loop_start_index"] = loop_start_index
@@ -185,7 +185,9 @@ def tla_ce_steps(ce):
     Each action entry is [fromRef, actionInfo, toRef] where fromRef/toRef are
     [stateNumber, stateVars] and actionInfo carries the executed label in "name".
     The actor is the process whose pc changed; the node is the executed label
-    (pre-state pc), which is exactly what the backends call L_<id>.
+    (pre-state pc), which is exactly what the backends call L_<id>. The "next"
+    field is the actor's pc AFTER the step (from the to-state): it disambiguates
+    same-node transitions (loop-guard pass vs exit) during trace replay.
     Returns (steps, loop_start_index or None).
     """
     transitions = ce.get("action") or []
@@ -197,17 +199,18 @@ def tla_ce_steps(ce):
         name = (info or {}).get("name") or ""
         if name == "Init" or is_ignored(name):
             continue
-        actor = "System"
+        actor, nxt = "System", None
         try:
             pc_from = (from_ref[1] or {}).get("pc", {})
             pc_to = (to_ref[1] or {}).get("pc", {})
             for k, v in pc_to.items():
                 if pc_from.get(k) != v:
                     actor = k
+                    nxt = node_from_label(v)
                     break
         except Exception:
             pass
-        steps.append({"actor": actor, "node": node_from_label(name), "action": name})
+        steps.append({"actor": actor, "node": node_from_label(name), "next": nxt, "action": name})
         # A liveness trace closes back onto an earlier state: the loop starts there
         try:
             if loop_start is None and to_ref[0] <= from_ref[0]:
@@ -312,6 +315,13 @@ def collect_spin_steps(trace_stdout, pml_labels):
     if cycle_seen and loop_start is None:
         # Empty loop: the marker is the last line, the final state stutters forever
         loop_start = len(steps) + 1
+    # "next" = the node of the actor's next step (its pc after this step);
+    # disambiguates same-node transitions (loop-guard pass vs exit). None for
+    # the actor's last step or across unlabeled plumbing steps.
+    last_by_actor = {}
+    for i in range(len(steps) - 1, -1, -1):
+        steps[i]['next'] = last_by_actor.get(steps[i]['actor'])
+        last_by_actor[steps[i]['actor']] = steps[i]['node']
     return steps, loop_start
 
 def parse_spin_output(target_file, source_map, source_code):
