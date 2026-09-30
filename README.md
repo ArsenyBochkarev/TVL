@@ -5,7 +5,7 @@ The state of the system is primarily characterized by message queues between act
 
 TVL also provides means for property verification through [specifications block](docs/specifications). It supports custom **`ltl`** and **`ctl`** formulas using user-defined labels, as well as template-based properties and implicitly generated label-based specifications.
 
-Models in TVL are first compiled into TVL IR, which is a bit lower-level intermediate representation. Next, the generated IR is translated into a target model checker language to perform the actual verification. Also, there is an ongoing work on a TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
+Models in TVL are first compiled into TVL IR. Next, the generated IR is translated into a target model checker language to perform the actual verification. TVL IR is also a target for TVL-specific model checker called [Curtis](https://github.com/ArsenyBochkarev/Curtis).
 
 There are two formal semantics for TVL language:
 - [Operational semantics](docs/semantics/operational_en.md)
@@ -27,6 +27,11 @@ There are two formal semantics for TVL language:
       #!/bin/bash
       java -cp /path/to/tla2tools.jar pcal.trans "$@"
       ```
+  - For Curtis, install it via installation script or manually add it on your `PATH`, e.g. `~/.local/bin/curtis`:
+    ```
+    #!/bin/bash
+    exec /path/to/Curtis/.lake/build/bin/curtis "$@"
+    ```
 
 ### Using Docker (Recommended)
 You can use the provided Dockerfile to easily set up an environment with all prerequisites installed.
@@ -43,7 +48,7 @@ To run the container interactively with your local repository mounted:
 docker run -it --user dev -v $(pwd):/app tvl-env
 ```
 
-Inside the container, you will have access to `java`, `sbt`, `spin`, and TLA+ tools (`tlc`, `pcal`). The ANTLR jar is available at `$ANTLR_JAR`.
+Inside the container, you will have access to `java`, `sbt`, `spin`, TLA+ and Curtis tools . The ANTLR jar is available at `$ANTLR_JAR`.
 
 ### Building from scratch for the first time
 ```shell
@@ -56,7 +61,7 @@ sbt compile
 translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]
 ```
 - `<input file>` is a TVL source (`.tvl`) or a TVL IR dump (`.tvir`)
-- `<target>` is `tla` or `spin`, or `ir` (no verification is run)
+- `<target>` is `tla` or `spin`, or `curtis`, or `ir`
 - `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
 - `--channel-size` / `--trace-size` set the channel size and counterexample size limits
 - The output file is always written next to the input file
@@ -66,6 +71,7 @@ Altough it is highly recommended to use [VS Code plugin](https://github.com/Arse
 ### Supported targets
 - TLA+ (initial translation made to PlusCal)
 - SPIN
+- Curtis
 - TVL IR
 
 #### TVL IR
@@ -88,6 +94,13 @@ A `.tvir` file can also be used as an input instead of the TVL source: it is par
 ```
 
 IR line numbers refer to the original TVL source, so counterexample traces for a `.tvir` input are rendered against the sibling `model.tvl` if it is present. See [docs/IR/IR.md](docs/IR/IR.md) for the format details.
+
+#### Curtis
+[Curtis](https://github.com/ArsenyBochkarev/Curtis) is a small explicit-state TVL-specific model checker written in Lean 4. Curtis takes `.tvir` files as an input format, and is able to verify both `ltl` and `ctl` specifications:
+
+```bash
+./translate src/model.tvl curtis  # writes src/model.tvir, verifies it with Curtis
+```
 
 ### Run tests
 You can run all tests using:

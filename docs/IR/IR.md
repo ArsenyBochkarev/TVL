@@ -123,6 +123,8 @@ instructionLine     = "  " id ": " IRInstruction     // two-space indent, instru
 "Labels:"           = one "  <actor>.<label>: <instructionId>" per line, sorted by (actor, label)
 ```
 
+*Note*: TVL IR does not embed channel size into `.tvir` files.
+
 ### Example
 Tail of the dump for `examples/userDefinedSpecs/sncrnz.tvl`:
 ```

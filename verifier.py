@@ -10,6 +10,7 @@ MAX_TRACE_STEPS = 20
 PCAL_CMD = f"pcal"
 TLC_CMD = f"tlc"
 SPIN_CMD = "spin"
+CURTIS_CMD = "curtis"
 
 IGNORED_PATTERNS = [
     r"^cur_msg_.*",
@@ -251,12 +252,45 @@ def parse_spin_output(target_file, source_map, source_code):
                 os.remove(trail_file)
 
 
+def parse_curtis_output(model_file, channel_size, max_steps):
+    """Curtis consumes the .tvir IR dump directly and prints its own verdict lines
+    ([ltl|ctl] <name>: HOLDS|VIOLATED) plus counterexample traces — relay them
+    as-is, truncating counterexample steps at max_steps (--trace-size), like the
+    tla/spin trace rendering. Exit codes: 0 all specs hold, 1 some spec violated, 2 error."""
+    result = run_cmd(f"{CURTIS_CMD} --channel-size {channel_size} {model_file}")
+    if result.stdout:
+        step_re = re.compile(r"^    \d+\. ")
+        in_cex, printed, truncated = False, 0, False
+        for line in result.stdout.splitlines():
+            if line.startswith("  counterexample"):
+                in_cex, printed, truncated = True, 0, False
+                print(line)
+            elif in_cex and step_re.match(line):
+                printed += 1
+                if printed <= max_steps:
+                    print(line)
+                elif not truncated:
+                    truncated = True
+                    print(f"    ... (counterexample truncated at --trace-size={max_steps} steps)")
+            else:
+                in_cex = False
+                print(line)
+    if result.returncode == 2 and result.stderr:
+        print(result.stderr, end="")
+    if result.returncode == 0:
+        print("VERIFICATION SUCCESSFUL (Curtis)")
+    else:
+        print("VERIFICATION FAILED (Curtis)")
+
+
 if __name__ == "__main__":
     if len(sys.argv) < 5:
-        print("Usage: python verifier.py <tla|spin> <model_file> <tvl source file> <line mapping file> <trace size>")
+        print("Usage: python verifier.py <tla|spin|curtis> <model_file> <tvl source file> <line mapping file> <trace size> [channel size]")
         sys.exit(1)
 
     target, model_file, source_file, map_file, MAX_TRACE_STEPS = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], int(sys.argv[5])
+    # Used by curtis only (passed to its CLI); the tla/spin codegen already embeds it
+    channel_size = int(sys.argv[6]) if len(sys.argv) > 6 else 20
 
     source_map = load_source_map(map_file)
     source_code = load_source_code(source_file)
@@ -268,3 +302,5 @@ if __name__ == "__main__":
         parse_tla_output(run_cmd(cmd).stdout, source_map, source_code)
     elif target == "spin":
         parse_spin_output(model_file, source_map, source_code)
+    elif target == "curtis":
+        parse_curtis_output(model_file, channel_size, MAX_TRACE_STEPS)

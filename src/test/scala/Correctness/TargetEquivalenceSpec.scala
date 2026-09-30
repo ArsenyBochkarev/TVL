@@ -59,6 +59,22 @@ class TargetEquivalenceSpec extends AnyFunSuite {
         assert(outTvl == outTvir,
           s"$targetName output for $relPath differs between .tvl and .tvir inputs")
       }
+
+      // Curtis consumes the IR dump itself: its target must re-emit a valid .tvir
+      // Main writes it via println(translate) + println(templateSpecs) + println(userSpecs);
+      // the layout may carry extra blank lines for empty sections, which both Curtis
+      // and TVIRReader tolerate — so compare after canonicalization against the golden.
+      def curtisDump(res: Translator.Frontend.FrontendResult): String = {
+        val t = new Curtis()
+        t.setEnabledProperties(res.templateSpecs)
+        t.setUserLabels(res.labels)
+        t.translate(res.ir) + "\n" + t.generateTemplateSpecs + "\n" +
+          t.generateUserSpecs(res.userSpecs, "curtis") + "\n"
+      }
+      assert(curtisDump(fromTvl) == curtisDump(fromTvir),
+        s"curtis dump for $relPath differs between .tvl and .tvir inputs")
+      assert(TVIRReader.fromTVIRString(curtisDump(fromTvl)).toTVIRString == Files.readString(goldenPath),
+        s"curtis dump for $relPath does not canonicalize to the golden .tvir")
     }
   }
 }

@@ -6,7 +6,8 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "Arguments:"
   echo "  <input_file>          Path to the source TVL file or a TVL IR dump (.tvir)."
   echo "                        Output is written next to it."
-  echo "  <target>              Translation target: 'tla' or 'spin' (model checker), or 'ir'"
+  echo "  <target>              Translation target: 'tla', 'spin',"
+  echo "                        'curtis', or 'ir'"
   echo "                        (frontend-only: write the TVL IR in .tvir text format,"
   echo "                        see docs/IR/IR.md; no verification is run)."
   echo "  --dump-ir=...         (Optional) Additionally dump the TVL IR (.tvir text format) to this path."
@@ -16,6 +17,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "Example:"
   echo "  ./translate src/model.tvl tla --channel-size=10"
   echo "  ./translate src/model.tvl ir"
+  echo "  ./translate src/model.tvl curtis"
   echo "  ./translate src/model.tvl tla --dump-ir=out/model.tvir"
   echo "  ./translate src/model.tvir tla"
   exit 0
@@ -32,7 +34,7 @@ TARGET=$2
 # Construct output file name
 if [[ "$TARGET" == "tla" ]]; then
   EXT="tla"
-elif [[ "$TARGET" == "ir" ]]; then
+elif [[ "$TARGET" == "ir" || "$TARGET" == "curtis" ]]; then
   EXT="tvir"
 else
   EXT="pml"
@@ -93,4 +95,6 @@ SOURCE_FILE="$INPUT"
 if [[ "$INPUT" == *.tvir ]]; then
   SOURCE_FILE="${INPUT%.tvir}.tvl"
 fi
-python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE
+# The channel size limit is consumed by the curtis checker CLI (--channel-size);
+# the tla/spin codegen already embeds it, and verifier.py ignores the extra arg there
+python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $CHANNEL_SIZE

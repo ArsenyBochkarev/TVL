@@ -33,6 +33,21 @@ RUN echo '#!/bin/bash\njava -cp /opt/tools/tla2tools.jar tlc2.TLC "$@"' > /usr/l
     echo '#!/bin/bash\njava -cp /opt/tools/tla2tools.jar pcal.trans "$@"' > /usr/local/bin/pcal && \
     chmod +x /usr/local/bin/tlc /usr/local/bin/pcal
 
+# Install elan + Lean 4 for Curtis
+# ELAN_HOME must be system-wide so the dev user inherits the toolchain.
+ENV ELAN_HOME=/opt/elan
+ENV PATH="/opt/elan/bin:${PATH}"
+RUN curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
+
+# Build Curtis; lake resolves the pinned Lean toolchain and Mathlib from the
+# repo's lean-toolchain + lake-manifest.json.
+ARG CURTIS_REF=main
+RUN git clone https://github.com/ArsenyBochkarev/Curtis.git /opt/tools/Curtis && \
+    cd /opt/tools/Curtis && \
+    git checkout ${CURTIS_REF} && \
+    lake build && \
+    ln -s /opt/tools/Curtis/.lake/build/bin/curtis /usr/local/bin/curtis
+
 # Create a local user whose UID/GID match the host (passed via build args)
 ARG UID=1000
 ARG GID=1000

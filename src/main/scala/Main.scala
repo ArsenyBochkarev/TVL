@@ -29,7 +29,7 @@ def loadFrontendResult(input: String, debug: Boolean): FrontendResult = {
 def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int): Unit = {
   val isIrTarget = target == "ir"
   if !isIrTarget && !targetIsValid(target) then
-    println(s"Error: Invalid target \"$target\". Use \"tla\", \"spin\" or \"ir\"")
+    println(s"Error: Invalid target \"$target\". Use \"tla\", \"spin\", \"curtis\" or \"ir\"")
     System.exit(1)
 
   val res = loadFrontendResult(input, debug)
@@ -47,6 +47,7 @@ def parse(input: String, output: String, target: String, dumpIrPath: String, deb
   val translator: TargetTranslator = target match {
     case "spin" => new Promela()
     case "tla" => new PlusCal()
+    case "curtis" => new Curtis()
   }
 
   translator.setOutputFile(output)

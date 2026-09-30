@@ -10,6 +10,7 @@ def targetIsValid(target: String): Boolean =
   target match {
     case "tla" => true
     case "spin" => true
+    case "curtis" => true
     case _ => false
   }
 
