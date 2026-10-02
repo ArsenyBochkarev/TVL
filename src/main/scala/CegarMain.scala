@@ -109,26 +109,35 @@ object Verdict:
         )
     }
 
-/** Maps a spurious culprit to a CONCRETE node id: ids are shared between the
-  * abstract and concrete IR except for nodes a pass inserted (reported per
-  * decision); a spuriousLoop verdict carries no node, so fall back to the LAST
-  * trace step executed at an abstracted (or inserted) node. */
+/** Maps a spurious culprit to a CONCRETE node id of a NOT-YET-BLACKLISTED
+  * abstraction (blacklisting an already-refined node makes no progress and
+  * ends the loop as UNKNOWN). Ids are shared between the abstract and concrete
+  * IR except for nodes a pass inserted (reported per decision). Candidates, in
+  * order: the verdict's own node (an inserted id maps back to its decision);
+  * the LAST trace step executed at an abstracted (or inserted) node; and, as a
+  * last resort so the loop always makes progress while any abstraction is
+  * still applied, the last still-applied decision. */
 def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
-                      steps: List[(String, Option[Int])]): Option[(String, Int)] =
-  v.node match
+                      steps: List[(String, Option[Int])],
+                      blacklisted: Set[(String, Int)]): Option[(String, Int)] =
+  def fresh(c: (String, Int)): Boolean = !blacklisted.contains(c)
+  val direct: Option[(String, Int)] = v.node match
     case Some(n) =>
       applied.find(d => d.actor == v.actor.getOrElse("") && d.inserted.contains(n))
         .map(d => (d.actor, d.node))
         .orElse(v.actor.map(a => (a, n)))
-    case None =>
-      val abstracted = applied.map(d => (d.actor, d.node, d.inserted))
-      steps.reverse.flatMap {
-        case (actor, Some(n)) =>
-          abstracted.collectFirst {
-            case (a, dn, inserted) if actor == a && (n == dn || inserted.contains(n)) => (a, dn)
-          }
-        case _ => None
-      }.headOption
+    case None => None
+  val abstracted = applied.map(d => (d.actor, d.node, d.inserted))
+  val fromTrace = steps.reverse.flatMap {
+    case (actor, Some(n)) =>
+      abstracted.collectFirst {
+        case (a, dn, inserted) if actor == a && (n == dn || inserted.contains(n)) => (a, dn)
+      }
+    case _ => None
+  }.headOption
+  direct.filter(fresh)
+    .orElse(fromTrace.filter(fresh))
+    .orElse(applied.reverse.find(d => fresh((d.actor, d.node))).map(d => (d.actor, d.node)))
 
 /** Prints a fatal message to stderr (unbuffered: a plain println right
   * before sys.exit is lost with the stdout buffer of the forked JVM) and
@@ -247,7 +256,8 @@ def tvlSourceFor(model: Path): Path =
           (for a <- s.field("actor").flatMap(_.asString) yield
             (a, s.field("node").flatMap(_.asInt))).toList)
         case None => Nil
-    culpritToConcrete(verdict, applied, steps) match
+    val blacklisted = spec.blacklist.map(e => (e.actor, e.node)).toSet
+    culpritToConcrete(verdict, applied, steps, blacklisted) match
       case None => die("spurious counterexample without a culprit node", 1)
       case Some((actor, node)) =>
         val already = spec.blacklist.exists(e => e.actor == actor && e.node == node)
