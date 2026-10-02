@@ -20,6 +20,12 @@ lazy val root = (project in file("."))
     inConfig(CorrectnessTest)(Defaults.testTasks),
     inConfig(TargetTest)(Defaults.testTasks),
 
+    // CLI drivers (`runMain main`, `runMain cegar`) run in a forked JVM with
+    // inherited stdio: their output bypasses the sbt logger (so -error does
+    // not swallow it) and their exit codes do not kill the sbt session.
+    run / fork := true,
+    run / outputStrategy := Some(StdoutOutput),
+
     UnitTest / testOptions := Seq(Tests.Filter(s => s.startsWith("Unit."))),
     CorrectnessTest / testOptions := Seq(Tests.Filter(s => s.startsWith("Correctness."))),
     TargetTest / testOptions := Seq(Tests.Filter(s => s.startsWith("Target.")))

@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# CEGAR loop driver wrapper (same style as ./translate): the loop itself runs
+# inside ONE sbt/JVM session (src/main/scala/CegarMain.scala, `runMain cegar`),
+# so the per-step sbt overhead is paid once per run.
+
+if [[ "$1" == "-h" || "$1" == "--help" ]]; then
+  echo "Usage: ./cegar <input_file> <target> [--workdir=DIR] [--channel-size=N]"
+  echo "                [--trace-size=N] [--iterations=N] [--kinds=a,b]"
+  echo ""
+  echo "Runs the CEGAR loop: abstract -> translate -> verify (SPIN/TLC) ->"
+  echo "validate (curtis) -> refine, until VERIFIED or a REAL counterexample."
+  echo ""
+  echo "  <input_file>          TVL source (.tvl) or a TVL IR dump (.tvir)."
+  echo "  <target>              Verification target: 'tla' or 'spin'."
+  echo "  --workdir=DIR         Artifacts directory (default: <input dir>/cegar-out)."
+  echo "  --channel-size=N      Channel capacity (default 20)."
+  echo "  --iterations=N        Refinement budget (default 20)."
+  echo "  --kinds=a,b           Auto abstraction kinds (default loop-unroll,branch-hoist)."
+  echo ""
+  echo "Requires curtis on PATH (trace validation) and the target checker"
+  echo "(tlc/pcal for tla, spin+gcc for spin)."
+  exit 0
+fi
+
+if [ "$#" -lt 2 ]; then
+  echo "Error: Not enough arguments provided."
+  exit 1
+fi
+
+INPUT=$1
+TARGET=$2
+ARGS="--model $INPUT --target $TARGET"
+
+shift 2
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --workdir=*|--channel-size=*|--trace-size=*|--iterations=*|--kinds=*)
+      KEY="${1%%=*}"
+      VAL="${1#*=}"
+      if [[ -z "$VAL" ]]; then
+        echo "Error: $KEY requires a value."
+        exit 1
+      fi
+      ARGS="$ARGS $KEY $VAL"
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
+
+exec sbt -error "runMain cegar $ARGS"

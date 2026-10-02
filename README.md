@@ -103,16 +103,19 @@ IR line numbers refer to the original TVL source, so counterexample traces for a
 ```
 
 ### CEGAR: abstraction + counterexample validation
-When verification of the full (concrete) model is slow, `cegar.py` drives a
+When verification of the full (concrete) model is slow, `./cegar` drives a
 classical CEGAR loop over the IR: abstract the model with sound
 over-approximations, verify the abstract model with the target model checker,
 validate any counterexample against the concrete model, and refine (un-abstract)
 the culprit node — until the abstract model is verified (which, for sound
-abstractions, implies the concrete one) or a real counterexample is found:
+abstractions, implies the concrete one) or a real counterexample is found.
+The whole loop runs in a single sbt/JVM session (`runMain cegar`,
+[cegar](cegar), implementation in `src/main/scala/CegarMain.scala`); the
+external tools (verifier.py, tlc/pcal or spin+gcc, curtis) are subprocesses:
 
 ```bash
-python3 cegar.py --model examples/cegar/loopUnroll.tvl --target tla
-python3 cegar.py --model src/model.tvl --target spin --validator curtis
+./cegar examples/cegar/loopUnroll.tvl tla
+./cegar src/model.tvl spin --workdir=out/cegar --iterations=10
 ```
 
 - Abstractions are configured by the `tvl-abstraction/1` sidecar
