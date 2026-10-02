@@ -1,0 +1,46 @@
+module LoopProduct
+
+actor W1 {
+    repeat 10 {
+        skip
+    }
+    send T to C
+}
+actor W2 {
+    repeat 10 {
+        skip
+    }
+    send T to C
+}
+actor W3 {
+    repeat 10 {
+        skip
+    }
+    send T to C
+}
+actor W4 {
+    repeat 10 {
+        skip
+    }
+    send T to C
+}
+
+actor W5 {
+    skip
+}
+
+actor C {
+    receive T from W1
+    receive T from W2
+    receive T from W3
+    receive T from W4
+    receive alts {
+        T from W5 => {
+            bad: skip
+        }
+    }
+}
+
+specs {
+    ltl NoBad: "G !(C.bad)";
+}
