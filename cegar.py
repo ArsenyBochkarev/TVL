@@ -72,13 +72,22 @@ def translate(model, output, target, cap, abstraction=None):
 
 
 def verify(target, model_file, source_file, map_file, trace_size, trace_json, cap):
+    """Returns 'violated' (a canonical counterexample was written), 'clean'
+    (all specs hold) or 'error' (the verifier failed without a verdict —
+    a tooling failure must never masquerade as a successful check)."""
     cmd = (f"python3 {VERIFIER} {target} {model_file} {source_file} {map_file} {trace_size} "
            f"--trace-json {trace_json} --channel-size {cap}")
     r = run(cmd)
     print(r.stdout, end="")
     if r.returncode != 0:
         print(r.stderr, end="", file=sys.stderr)
-    return os.path.exists(trace_json)
+    if os.path.exists(trace_json):
+        return "violated"
+    out = r.stdout or ""
+    if not out.strip():
+        return "error"
+    failed = "VERIFICATION FAILED" in out or "RESULT: FAILED" in out
+    return "error" if failed else "clean"
 
 
 def parse_validate_line(output):
@@ -211,9 +220,16 @@ def main():
         if os.path.exists(trace_json):
             os.remove(trace_json)
         abstract_map = os.path.join(itdir, "abstract.map.json")
-        violated = verify(args.target, abstract_model, source_file, abstract_map,
-                          args.trace_size, trace_json, args.channel_size)
-        if not violated:
+        status = verify(args.target, abstract_model, source_file, abstract_map,
+                        args.trace_size, trace_json, args.channel_size)
+        if status == "error":
+            print("\n[cegar] ERROR: the verifier failed without a verdict "
+                  "(see its output above)")
+            history.append({"iteration": it, "verdict": "error"})
+            with open(os.path.join(workdir, "report.json"), "w", encoding="utf-8") as f:
+                json.dump({"verdict": "ERROR", "iterations": history}, f, indent=2)
+            return 2
+        if status != "violated":
             print(f"\n[cegar] VERIFIED: all specs hold on the abstract model (iteration {it})")
             history.append({"iteration": it, "verdict": "verified"})
             report = {"verdict": "VERIFIED", "iterations": history}
