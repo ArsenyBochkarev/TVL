@@ -1,0 +1,72 @@
+module Slicing
+
+actor W1 {
+    repeat 10 {
+        send L to Logger
+    }
+    send Done to M
+}
+actor W2 {
+    repeat 10 {
+        send L to Logger
+    }
+    send Done to M
+}
+actor W3 {
+    repeat 10 {
+        send L to Logger
+    }
+    send Done to M
+}
+
+actor Logger {
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W1
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W2
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+    receive L from W3
+}
+
+actor M {
+    receive Done from W1
+    receive Done from W2
+    receive Done from W3
+    receive alts {
+        Done from Z => {
+            bad: skip
+        }
+    }
+}
+
+actor Z {
+    skip
+}
+
+specs {
+    ltl NoBad: "G !(M.bad)";
+}

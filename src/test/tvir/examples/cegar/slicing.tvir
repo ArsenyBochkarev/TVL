@@ -1,0 +1,72 @@
+Actor: Logger
+  19: IRQueuePop(19,23,(-1,-1),20,Q[Logger][W1],L)
+  20: IRQueuePop(20,24,(-1,-1),21,Q[Logger][W1],L)
+  21: IRQueuePop(21,25,(-1,-1),22,Q[Logger][W1],L)
+  22: IRQueuePop(22,26,(-1,-1),23,Q[Logger][W1],L)
+  23: IRQueuePop(23,27,(-1,-1),24,Q[Logger][W1],L)
+  24: IRQueuePop(24,28,(-1,-1),25,Q[Logger][W1],L)
+  25: IRQueuePop(25,29,(-1,-1),26,Q[Logger][W1],L)
+  26: IRQueuePop(26,30,(-1,-1),27,Q[Logger][W1],L)
+  27: IRQueuePop(27,31,(-1,-1),28,Q[Logger][W1],L)
+  28: IRQueuePop(28,32,(-1,-1),29,Q[Logger][W1],L)
+  29: IRQueuePop(29,33,(-1,-1),30,Q[Logger][W2],L)
+  30: IRQueuePop(30,34,(-1,-1),31,Q[Logger][W2],L)
+  31: IRQueuePop(31,35,(-1,-1),32,Q[Logger][W2],L)
+  32: IRQueuePop(32,36,(-1,-1),33,Q[Logger][W2],L)
+  33: IRQueuePop(33,37,(-1,-1),34,Q[Logger][W2],L)
+  34: IRQueuePop(34,38,(-1,-1),35,Q[Logger][W2],L)
+  35: IRQueuePop(35,39,(-1,-1),36,Q[Logger][W2],L)
+  36: IRQueuePop(36,40,(-1,-1),37,Q[Logger][W2],L)
+  37: IRQueuePop(37,41,(-1,-1),38,Q[Logger][W2],L)
+  38: IRQueuePop(38,42,(-1,-1),39,Q[Logger][W2],L)
+  39: IRQueuePop(39,43,(-1,-1),40,Q[Logger][W3],L)
+  40: IRQueuePop(40,44,(-1,-1),41,Q[Logger][W3],L)
+  41: IRQueuePop(41,45,(-1,-1),42,Q[Logger][W3],L)
+  42: IRQueuePop(42,46,(-1,-1),43,Q[Logger][W3],L)
+  43: IRQueuePop(43,47,(-1,-1),44,Q[Logger][W3],L)
+  44: IRQueuePop(44,48,(-1,-1),45,Q[Logger][W3],L)
+  45: IRQueuePop(45,49,(-1,-1),46,Q[Logger][W3],L)
+  46: IRQueuePop(46,50,(-1,-1),47,Q[Logger][W3],L)
+  47: IRQueuePop(47,51,(-1,-1),48,Q[Logger][W3],L)
+  48: IRQueuePop(48,52,(-1,-1),49,Q[Logger][W3],L)
+  49: IREnd(49,53,(-1,-1))
+
+Actor: M
+  50: IRQueuePop(50,56,(-1,-1),51,Q[M][W1],Done)
+  51: IRQueuePop(51,57,(-1,-1),52,Q[M][W2],Done)
+  52: IRQueuePop(52,58,(-1,-1),53,Q[M][W3],Done)
+  53: IRBranch(53,59,(-1,-1),List(QueueCondition(Q[M][Z],Done,56)),None)
+  55: IREnd(55,64,(-1,-1))
+  56: IRSkip(56,61,(-1,-1),57)
+  57: IRJump(57,59,(-1,-1),55)
+
+Actor: W1
+  1: IRJumpGuard(1,4,(-1,-1),3,guard_W1_1,4,10)
+  3: IRQueuePush(3,7,(-1,-1),6,Q[M][W1],Done)
+  4: IRQueuePush(4,5,(-1,-1),5,Q[Logger][W1],L)
+  5: IRJump(5,4,(-1,-1),1)
+  6: IREnd(6,8,(-1,-1))
+
+Actor: W2
+  7: IRJumpGuard(7,10,(-1,-1),9,guard_W2_7,10,10)
+  9: IRQueuePush(9,13,(-1,-1),12,Q[M][W2],Done)
+  10: IRQueuePush(10,11,(-1,-1),11,Q[Logger][W2],L)
+  11: IRJump(11,10,(-1,-1),7)
+  12: IREnd(12,14,(-1,-1))
+
+Actor: W3
+  13: IRJumpGuard(13,16,(-1,-1),15,guard_W3_13,16,10)
+  15: IRQueuePush(15,19,(-1,-1),18,Q[M][W3],Done)
+  16: IRQueuePush(16,17,(-1,-1),17,Q[Logger][W3],L)
+  17: IRJump(17,16,(-1,-1),13)
+  18: IREnd(18,20,(-1,-1))
+
+Actor: Z
+  58: IRSkip(58,67,(-1,-1),59)
+  59: IREnd(59,68,(-1,-1))
+
+User specs:
+  ltl NoBad: G !(M.bad)
+
+Labels:
+  M.bad: 56

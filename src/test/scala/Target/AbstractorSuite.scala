@@ -11,24 +11,32 @@ import scala.collection.mutable
 
 class AbstractorSuite extends AnyFunSuite {
 
+  // A logs to C, B has a bounded loop; the spec only mentions B
   private val src =
     """module Test
       |
-      |actor R1 {
-      |    send X to R2
-      |    send X to R2
-      |    send X to R2
-      |    send X to R2
+      |actor A {
+      |    send X to C
+      |    repeat 2 {
+      |        send Y to C
+      |    }
       |}
       |
-      |actor R2 {
+      |actor B {
       |    repeat 3 {
-      |        receive X from R1
+      |        receive X from R
       |    }
-      |    alt: receive alts {
-      |        X from R1 => { skip }
-      |        otherwise => { send Y to R1 }
-      |    }
+      |    done: skip
+      |}
+      |
+      |actor C {
+      |    receive X from A
+      |    receive Y from A
+      |    receive Y from A
+      |}
+      |
+      |specs {
+      |    ltl Finish: "F B.done";
       |}
       |""".stripMargin
 
@@ -46,88 +54,112 @@ class AbstractorSuite extends AnyFunSuite {
 
   test("loop-unroll replaces IRJumpGuard with IRChoice{body, exit} in place") {
     val fr = frontend
-    val guard = firstOf(fr, "R2") { case _: IRJumpGuard => true; case _ => false }.asInstanceOf[IRJumpGuard]
-    val out = Abstractor(fr, specOf(NodeDecision("R2", guard.id, "loop-unroll")))
+    val guard = firstOf(fr, "B") { case _: IRJumpGuard => true; case _ => false }.asInstanceOf[IRJumpGuard]
+    val out = Abstractor(fr, specOf(NodeDecision("B", guard.id, "loop-unroll")))
     assert(out.applied.map(_.node) == List(guard.id))
 
-    val choice = instrsOf(out.result, "R2")(guard.id).asInstanceOf[IRChoice]
+    val choice = instrsOf(out.result, "B")(guard.id).asInstanceOf[IRChoice]
     assert(choice.branches.toSet == Set(guard.target, guard.next))
-    assert(instrsOf(out.result, "R2").values.forall { case _: IRJumpGuard => false; case _ => true },
+    assert(instrsOf(out.result, "B").values.forall { case _: IRJumpGuard => false; case _ => true },
       "the guard var must disappear with the last IRJumpGuard")
     // postcondition: structurally valid .tvir round trip
     TVIRReader.fromTVIRString(out.result.toTVIRString)
   }
 
-  test("branch-hoist replaces IRBranch with IRChoice over hoisted consuming pops") {
+  test("slice-actor removes the actor and turns sends to it into skips") {
     val fr = frontend
-    val branch = firstOf(fr, "R2") { case _: IRBranch => true; case _ => false }.asInstanceOf[IRBranch]
-    val out = Abstractor(fr, specOf(NodeDecision("R2", branch.id, "branch-hoist")))
+    val cEntry = instrsOf(fr, "C").keys.min
+    val out = Abstractor(fr, specOf(NodeDecision("C", cEntry, "slice-actor")))
+    assert(out.applied.map(_.actor) == List("C"))
+    assert(out.refused.isEmpty && out.disabledSpecs.isEmpty)
 
-    val choice = instrsOf(out.result, "R2")(branch.id).asInstanceOf[IRChoice]
-    assert(choice.branches.last == branch.otherwise.get, "otherwise stays the last, always-enabled branch")
-    assert(choice.branches.length == branch.cases.length + 1)
-
-    branch.cases.zip(choice.branches.dropRight(1)).foreach { (c, popId) =>
-      val pop = instrsOf(out.result, "R2")(popId).asInstanceOf[IRQueuePop]
-      assert(pop.queueName == c.queueName && pop.msg == c.msg,
-        "the hoisted pop must consume exactly the case's message")
-      assert(pop.next == c.bodyStart, "the hoisted pop must lead into the case body")
-      assert(pop.scheduler == branch.scheduler, "inserted nodes carry the enclosing scheduler tuple")
-      assert(pop.lineNumber == branch.lineNumber, "source mapping is preserved for traces")
+    assert(!out.result.ir.contains("C"), "the sliced actor must be gone")
+    val affected = out.applied.head.affected
+    assert(affected.nonEmpty, "the sends to C must be reported as affected")
+    affected.foreach { id =>
+      val (actor, instr) = out.result.ir.find((_, m) => m.contains(id)).get
+      val skip = instr(id).asInstanceOf[IRSkip]
+      assert(actor == "A", "only A sends to C")
     }
+    // the skip keeps the original successor, so the graph stays connected
+    val aInstrs = instrsOf(out.result, "A")
+    assert(aInstrs.values.forall {
+      case p: IRQueuePush => !p.queueName.contains("][C]")
+      case _ => true
+    }, "no instruction may reference a queue of the sliced actor")
     TVIRReader.fromTVIRString(out.result.toTVIRString)
   }
 
-  test("labels keep resolving: an in-place rewrite preserves the labeled node id") {
+  test("slice-actor refuses actors the specs/labels observe") {
     val fr = frontend
-    val labeledId = fr.labels("R2")("alt")
-    val out = Abstractor(fr, specOf(NodeDecision("R2", labeledId, "branch-hoist")))
-    assert(out.result.labels("R2")("alt") == labeledId)
-    assert(instrsOf(out.result, "R2")(labeledId).isInstanceOf[IRChoice])
-    TVIRReader.fromTVIRString(out.result.toTVIRString) // validates labels too
+    val bEntry = instrsOf(fr, "B").keys.min
+    val out = Abstractor(fr, specOf(NodeDecision("B", bEntry, "slice-actor")))
+    assert(out.applied.isEmpty)
+    assert(out.refused.exists(_._1.actor == "B"))
+    assert(out.result.ir.contains("B"))
   }
 
-  test("auto expands a kind to every applicable node; blacklist wins over it") {
+  test("slice-actor refuses actors that send to kept actors") {
     val fr = frontend
-    val guards = instrsOf(fr, "R2").values.collect { case g: IRJumpGuard => g }.map(_.id).toList
-    val spec = AbstractionSpec(Nil, List("loop-unroll"), Nil, Nil)
+    val aEntry = instrsOf(fr, "A").keys.min
+    val out = Abstractor(fr, specOf(NodeDecision("A", aEntry, "slice-actor")))
+    assert(out.applied.isEmpty)
+    assert(out.refused.exists(_._1.actor == "A"))
+    assert(out.refused.head._2.contains("sends"))
+  }
+
+  test("slice-actor drops template specs and reports them") {
+    val withTemplate = FrontendResult(frontend.ir, List("FinishingProperty"), frontend.userSpecs, frontend.labels)
+    val cEntry = instrsOf(withTemplate, "C").keys.min
+    val out = Abstractor(withTemplate, specOf(NodeDecision("C", cEntry, "slice-actor")))
+    assert(out.applied.map(_.actor) == List("C"))
+    assert(out.disabledSpecs == List("FinishingProperty"))
+    assert(out.result.templateSpecs.isEmpty)
+  }
+
+  test("auto expands slice-actor to one decision per actor, minus refusals; loop-unroll per guard") {
+    val fr = frontend
+    val spec = AbstractionSpec(Nil, List("slice-actor", "loop-unroll"), Nil, Nil)
     val out = Abstractor(fr, spec)
-    assert(out.applied.map(_.node).toSet == guards.toSet)
-
-    val refined = spec.withBlacklisted("R2", guards.head, "test refinement")
-    val out2 = Abstractor(fr, refined)
-    assert(out2.applied.map(_.node).toSet == guards.toSet - guards.head)
+    // A's entry node is also its loop guard: the two decisions must coexist
+    assert(out.applied.exists(d => d.actor == "A" && d.kind == "slice-actor"))
+    assert(out.applied.exists(d => d.actor == "C" && d.kind == "slice-actor"))
+    // B carries a label and is named by the spec, so it is never sliced, but
+    // its loop guard is still unrolled
+    assert(out.applied.exists(d => d.actor == "B" && d.kind == "loop-unroll"))
+    assert(!out.applied.exists(d => d.actor == "B" && d.kind == "slice-actor"))
+    assert(out.refused.map(_._1.actor).toSet == Set("B"))
   }
 
-  test("explicit decisions also respect the blacklist") {
+  test("explicit decisions respect the blacklist") {
     val fr = frontend
-    val guard = firstOf(fr, "R2") { case _: IRJumpGuard => true; case _ => false }
-    val spec = AbstractionSpec(List(NodeDecision("R2", guard.id, "loop-unroll")), Nil,
-      List(BlacklistEntry("R2", guard.id, "spurious")), Nil)
+    val guard = firstOf(fr, "B") { case _: IRJumpGuard => true; case _ => false }
+    val spec = AbstractionSpec(List(NodeDecision("B", guard.id, "loop-unroll")), Nil,
+      List(BlacklistEntry("B", guard.id, "spurious")), Nil)
     assert(Abstractor(fr, spec).applied.isEmpty)
   }
 
   test("unknown kind is a hard error") {
     val fr = frontend
-    val guard = firstOf(fr, "R2") { case _: IRJumpGuard => true; case _ => false }
+    val guard = firstOf(fr, "B") { case _: IRJumpGuard => true; case _ => false }
     val e = intercept[AbstractionException] {
-      Abstractor(fr, specOf(NodeDecision("R2", guard.id, "pop-skip")))
+      Abstractor(fr, specOf(NodeDecision("B", guard.id, "pop-skip")))
     }
     assert(e.getMessage.contains("pop-skip"))
   }
 
   test("kind that does not apply to the node is a hard error") {
     val fr = frontend
-    val branch = firstOf(fr, "R2") { case _: IRBranch => true; case _ => false }
+    val skip = firstOf(fr, "B") { case _: IRSkip => true; case _ => false }
     val e = intercept[AbstractionException] {
-      Abstractor(fr, specOf(NodeDecision("R2", branch.id, "loop-unroll")))
+      Abstractor(fr, specOf(NodeDecision("B", skip.id, "loop-unroll")))
     }
     assert(e.getMessage.contains("does not apply"))
   }
 
   test("missing node is a hard error") {
     val e = intercept[AbstractionException] {
-      Abstractor(frontend, specOf(NodeDecision("R2", 99999, "loop-unroll")))
+      Abstractor(frontend, specOf(NodeDecision("B", 99999, "loop-unroll")))
     }
     assert(e.getMessage.contains("99999"))
   }
@@ -135,17 +167,15 @@ class AbstractorSuite extends AnyFunSuite {
   test("disable_specs drops template specs from the abstract result") {
     val fr = frontend
     val spec = AbstractionSpec(Nil, Nil, Nil, List("FinishingProperty"))
-    // the test source declares no template specs, so this is a no-op there;
-    // verify the filtering logic through the report path instead
     val out = Abstractor(fr, spec)
     assert(out.result.templateSpecs == fr.templateSpecs.filterNot(_ == "FinishingProperty"))
   }
 
   test("sidecar spec survives a save/load round trip") {
     val spec = AbstractionSpec(
-      List(NodeDecision("R2", 12, "loop-unroll")),
-      List("branch-hoist"),
-      List(BlacklistEntry("R2", 12, "spurious at iter 1, step 7")),
+      List(NodeDecision("B", 12, "loop-unroll")),
+      List("slice-actor"),
+      List(BlacklistEntry("B", 12, "spurious at iter 1, step 7")),
       List("ValidityProperty"))
     val text = Json.print(spec.toJson)
     val back = AbstractionSpec.parse(text)

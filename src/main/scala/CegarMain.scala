@@ -34,7 +34,7 @@ case class CegarOpts(
   channelSize: Int = 20,
   traceSize: Int = 20,
   iterations: Int = 20,
-  kinds: String = "loop-unroll,branch-hoist",
+  kinds: String = "loop-unroll,slice-actor",
 )
 
 val cegarUsage: String =
@@ -112,9 +112,10 @@ object Verdict:
 /** Maps a spurious culprit to a CONCRETE node id of a NOT-YET-BLACKLISTED
   * abstraction (blacklisting an already-refined node makes no progress and
   * ends the loop as UNKNOWN). Ids are shared between the abstract and concrete
-  * IR except for nodes a pass inserted (reported per decision). Candidates, in
-  * order: the verdict's own node (an inserted id maps back to its decision);
-  * the LAST trace step executed at an abstracted (or inserted) node; and, as a
+  * IR except for nodes a pass touched beyond its head (reported per decision).
+  * Candidates, in order: the verdict's own node (an affected id maps back to
+  * its decision); the LAST trace step executed at an abstracted (or affected)
+  * node; and, as a
   * last resort so the loop always makes progress while any abstraction is
   * still applied, the last still-applied decision. */
 def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
@@ -123,15 +124,15 @@ def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
   def fresh(c: (String, Int)): Boolean = !blacklisted.contains(c)
   val direct: Option[(String, Int)] = v.node match
     case Some(n) =>
-      applied.find(d => d.actor == v.actor.getOrElse("") && d.inserted.contains(n))
+      applied.find(d => d.actor == v.actor.getOrElse("") && d.affected.contains(n))
         .map(d => (d.actor, d.node))
         .orElse(v.actor.map(a => (a, n)))
     case None => None
-  val abstracted = applied.map(d => (d.actor, d.node, d.inserted))
+  val abstracted = applied.map(d => (d.actor, d.node, d.affected))
   val fromTrace = steps.reverse.flatMap {
     case (actor, Some(n)) =>
       abstracted.collectFirst {
-        case (a, dn, inserted) if actor == a && (n == dn || inserted.contains(n)) => (a, dn)
+        case (a, dn, aff) if actor == a && (n == dn || aff.contains(n)) => (a, dn)
       }
     case _ => None
   }.headOption
@@ -212,8 +213,8 @@ def tvlSourceFor(model: Path): Path =
               actor <- d.field("actor").flatMap(_.asString)
               node <- d.field("node").flatMap(_.asInt)
               kind <- d.field("kind").flatMap(_.asString)
-              inserted = d.field("inserted").map(ij => ij.items.flatMap(_.asInt)).getOrElse(Nil)
-            yield AppliedDecision(actor, node, kind, inserted)).toList
+              affected = d.field("affected").map(ij => ij.items.flatMap(_.asInt)).getOrElse(Nil)
+            yield AppliedDecision(actor, node, kind, affected)).toList
           }
         case None => Nil
 

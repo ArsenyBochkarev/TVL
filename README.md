@@ -120,8 +120,13 @@ external tools (verifier.py, tlc/pcal or spin+gcc, curtis) are subprocesses:
 
 - Abstractions are configured by the `tvl-abstraction/1` sidecar
   (`<workdir>/abstraction.json`): `auto` kinds (`loop-unroll`: `repeat N` ->
-  nondeterministic loop; `branch-hoist`: `receive alts` -> choice with hoisted
-  consuming pops) plus a `blacklist` that refinement extends each iteration.
+  nondeterministic loop, the counter disappears from the state;
+  `slice-actor`: remove an actor the specification does not observe, together
+  with every send to it - deletes whole state dimensions; refused with a
+  reason when the actor carries labels, is mentioned by a spec, or sends to
+  kept actors) plus a `blacklist` that refinement extends each iteration.
+  Slicing drops template specs (they would silently change meaning); the
+  verification is then over the user specs only.
 - Validation is always done by [Curtis](https://github.com/ArsenyBochkarev/Curtis)
   (`curtis validate`, required on PATH): it replays the counterexample against
   the concrete `.tvir` on the IR level and understands the branch-hoist

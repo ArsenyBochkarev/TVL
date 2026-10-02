@@ -3,13 +3,11 @@ package Translator.Abstraction
 import Translator.Abstraction.AbstractionSpec
 import Translator.Frontend.{FrontendResult, TVIRReader}
 import Translator.IR.*
-import Translator.IR.Lib.QueueCondition
 
 import scala.collection.mutable
+import scala.util.matching.Regex
 
-/** One IR-to-IR abstraction pass. A pass rewrites the head instruction
-  * (keeping its id, so labels stay resolvable) and may insert extra
-  * instructions that carry the same scheduler tuple. */
+/** One IR-to-IR abstraction pass. */
 trait AbstractionPass {
   val kind: String
 
@@ -18,8 +16,18 @@ trait AbstractionPass {
     * conditions. Kept as a flag so future passes can be rejected here. */
   val sound: Boolean
 
-  def appliesTo(i: IRInstruction): Boolean
-  def rewrite(actor: String, i: IRInstruction, freshId: () => Int): (IRInstruction, List[IRInstruction])
+  /** Per-node passes: can this instruction be rewritten in place? */
+  def appliesTo(i: IRInstruction): Boolean = false
+
+  /** Per-node passes: rewrite the head instruction (keeping its id, so labels
+    * stay resolvable) plus optional extra instructions. */
+  def rewrite(actor: String, i: IRInstruction, freshId: () => Int): (IRInstruction, List[IRInstruction]) =
+    throw new AbstractionException(s"$kind is not a per-node pass")
+
+  /** Which nodes of an actor a decision may target; actor-level passes yield
+    * the actor's entry id. */
+  def candidateIds(instrs: mutable.Map[Int, IRInstruction]): List[Int] =
+    instrs.values.filter(appliesTo).map(_.id).toList.sorted
 }
 
 /** `repeat N` (IRJumpGuard) -> IRChoice{enter body, exit loop}: the unbounded
@@ -30,71 +38,112 @@ object LoopUnrollPass extends AbstractionPass {
   val kind = "loop-unroll"
   val sound = true
 
-  def appliesTo(i: IRInstruction): Boolean = i match
+  override def appliesTo(i: IRInstruction): Boolean = i match
     case _: IRJumpGuard => true
     case _              => false
 
-  def rewrite(actor: String, i: IRInstruction, freshId: () => Int): (IRInstruction, List[IRInstruction]) =
+  override def rewrite(actor: String, i: IRInstruction, freshId: () => Int): (IRInstruction, List[IRInstruction]) =
     i match
       case g: IRJumpGuard =>
         (IRChoice(g.id, g.lineNumber, g.scheduler, List(g.target, g.next)), Nil)
       case _ => throw new AbstractionException(s"$kind does not apply to instruction ${i.id}")
 }
 
-/** `receive alts` (IRBranch) -> IRChoice with a consuming IRQueuePop hoisted
-  * as the first node of every case body. The plain IRChoice-over-bodyStarts
-  * rewrite is UNSOUND: IRBranch consumes the matched message, and dropping
-  * the consumption leaves it stuck at the FIFO head, blocking later receives
-  * (under-approximation — real behaviors would go missing). Keeping the pop
-  * makes the abstract branch commit early and then block at the pop until
-  * the message arrives: a genuine over-approximation. The `otherwise` arm is
-  * kept as an always-enabled choice branch (superset of "enabled when no case
-  * matches"). */
-object BranchHoistPass extends AbstractionPass {
-  val kind = "branch-hoist"
+/** Slicing (actor removal): remove an actor that the specification does not
+  * observe, together with every send to it (each such IRQueuePush becomes an
+  * IRSkip with the same successor). This deletes whole state dimensions: the
+  * actor's pc and the contents of its queues.
+  *
+  * Soundness conditions (violations are REFUSED with a reason, never silently
+  * skipped, and never weaken the check by accident):
+  *   - no user spec mentions the actor (atoms `Actor.label`);
+  *   - no label is defined on the actor (it would dangle);
+  *   - the actor sends nothing to actors that remain (removing such sends
+  *     would remove behaviors of the receivers - an under-approximation);
+  *   - template specs are regenerated from the sliced IR and would silently
+  *     change meaning, so applying any slice DROPS them all (reported back,
+  *     the driver reports "verified under the user specs only").
+  *
+  * Note the remaining unsoundness gap this pass accepts: removing a send also
+  * removes the sender's blocking on a full queue, which can remove stuck
+  * behaviors. That matters only for LIVENESS properties about the senders;
+  * the no-sends-to-kept-actors rule above is what keeps it away from the
+  * actors anyone observes. */
+object SliceActorPass extends AbstractionPass {
+  val kind = "slice-actor"
   val sound = true
 
-  def appliesTo(i: IRInstruction): Boolean = i match
-    case _: IRBranch => true
-    case _           => false
-
-  def rewrite(actor: String, i: IRInstruction, freshId: () => Int): (IRInstruction, List[IRInstruction]) =
-    i match
-      case b: IRBranch =>
-        val pops = b.cases.map { c =>
-          IRQueuePop(freshId(), b.lineNumber, b.scheduler, c.bodyStart, c.queueName, c.msg)
-        }
-        (IRChoice(b.id, b.lineNumber, b.scheduler, pops.map(_.id) ++ b.otherwise.toList), pops)
-      case _ => throw new AbstractionException(s"$kind does not apply to instruction ${i.id}")
+  /** One decision per actor: its entry node. */
+  override def candidateIds(instrs: mutable.Map[Int, IRInstruction]): List[Int] =
+    List(instrs.keys.min)
 }
 
-/** A decision that was applied: the concrete node that was rewritten, plus the
-  * ids of instructions the pass inserted (fresh ids absent from the concrete
-  * IR — the driver maps trace culprits at inserted nodes back to `node`). */
-case class AppliedDecision(actor: String, node: Int, kind: String, inserted: List[Int]) {
+/** A decision that was applied: the concrete node it targeted, plus the ids of
+  * instructions the pass touched besides the head (for slice-actor: the
+  * replaced send nodes). The driver maps trace culprits at those ids back to
+  * the decision when refining. */
+case class AppliedDecision(actor: String, node: Int, kind: String, affected: List[Int]) {
   def decision: NodeDecision = NodeDecision(actor, node, kind)
 }
 
 case class AbstractorResult(result: FrontendResult,
                             applied: List[AppliedDecision],
-                            refused: List[(NodeDecision, String)])
+                            refused: List[(NodeDecision, String)],
+                            disabledSpecs: List[String])
 
 object Abstractor {
-  val passes: List[AbstractionPass] = List(LoopUnrollPass, BranchHoistPass)
+  val passes: List[AbstractionPass] = List(LoopUnrollPass, SliceActorPass)
 
   def passByKind(kind: String): Option[AbstractionPass] = passes.find(_.kind == kind)
 
-  /** All (actor, node) pairs a kind applies to — for the `auto` list and for
-    * reporting the refinement bound. */
+  /** The receiver part of a queue name "Q[Receiver][Sender]". */
+  def queueReceiver(queueName: String): String =
+    queueName.stripPrefix("Q[").takeWhile(_ != ']')
+
+  /** Does a formula mention the actor as an atom prefix (`Actor.`)? */
+  def mentionsActor(formula: String, actor: String): Boolean =
+    s"(?<![A-Za-z0-9_])${Regex.quote(actor)}\\.".r.findFirstIn(formula).isDefined
+
+  /** All (actor, node) pairs a kind applies to — for the `auto` list. */
   def candidates(fr: FrontendResult, kind: String): List[NodeDecision] =
     passByKind(kind) match
       case None => throw new AbstractionException(s"unknown abstraction kind \"$kind\"")
       case Some(pass) =>
-        fr.ir.toList.flatMap { (actor, instrs) =>
-          instrs.values.filter(pass.appliesTo).toList
-            .sortBy(_.id)
-            .map(i => NodeDecision(actor, i.id, kind))
+        fr.ir.toList.sortBy(_._1).flatMap { (actor, instrs) =>
+          pass.candidateIds(instrs).map(id => NodeDecision(actor, id, kind))
         }
+
+  /** Which actors may be sliced, given the full candidate set: iterate the
+    * guardrails to a fixpoint (an actor that sends to another candidate may be
+    * sliced only together with it, and a refused candidate turns such sends
+    * into violations for the sender too). */
+  private def sliceableActors(fr: FrontendResult, wanted: List[String]): (Set[String], List[(String, String)]) = {
+    var refused: List[(String, String)] = Nil
+    // seed: actors the specs or labels observe can never be sliced
+    var ok = wanted.toSet
+    for actor <- wanted do
+      if fr.labels.contains(actor) then
+        refused ::= (actor, "the actor carries labels")
+        ok = ok - actor
+      else if fr.userSpecs.exists(us => mentionsActor(us.formula, actor)) then
+        refused ::= (actor, "a user spec mentions the actor")
+        ok = ok - actor
+    // fixpoint: sends to kept actors block the sender
+    var changed = true
+    while changed do
+      changed = false
+      for actor <- ok.toList do
+        val sendsToKept = fr.ir(actor).values.exists {
+          case p: IRQueuePush => val r = queueReceiver(p.queueName)
+                                  r != actor && !ok.contains(r)
+          case _ => false
+        }
+        if sendsToKept then
+          refused ::= (actor, "the actor sends to an actor that remains")
+          ok = ok - actor
+          changed = true
+    (ok, refused)
+  }
 
   def apply(fr: FrontendResult, spec: AbstractionSpec): AbstractorResult = {
     val blacklisted = spec.blacklisted
@@ -104,26 +153,40 @@ object Abstractor {
         throw new AbstractionException(s"unknown abstraction kind in \"auto\": \"$kind\"")
 
     // effective decisions: explicit ones, plus auto-expanded ones, minus the blacklist
+    // keyed by (actor, node, kind): the same node may legitimately carry
+    // decisions of different kinds (an actor's entry node is often also its
+    // first loop guard), so (actor, node) alone would collapse them
     val autoDecisions = spec.auto.flatMap(candidates(fr, _))
-      .filterNot(d => blacklisted.contains((d.actor, d.node)))
     val explicit = spec.decisions
       .filterNot(d => blacklisted.contains((d.actor, d.node)))
-      .map(d => (d.actor, d.node) -> d).toMap
+      .map(d => (d.actor, d.node, d.kind) -> d).toMap
     val effective =
-      (explicit ++ autoDecisions.map(d => (d.actor, d.node) -> d).filterNot((k, _) => explicit.contains(k))).values.toList
+      (explicit ++ autoDecisions.filterNot(d => blacklisted.contains((d.actor, d.node)))
+        .map(d => (d.actor, d.node, d.kind) -> d).filterNot((k, _) => explicit.contains(k))).values.toList
 
     // unknown kinds / wrong node types are hard errors, never silent skips
     effective.foreach { d =>
       val pass = passByKind(d.kind).getOrElse(
         throw new AbstractionException(s"unknown abstraction kind \"${d.kind}\" (actor ${d.actor}, node ${d.node})"))
-      val instr = fr.ir.get(d.actor).flatMap(_.get(d.node)).getOrElse(
-        throw new AbstractionException(s"actor \"${d.actor}\" has no instruction ${d.node}"))
-      if !pass.appliesTo(instr) then
-        throw new AbstractionException(
-          s"${d.kind} does not apply to actor ${d.actor} node ${d.node} (${instr.getClass.getSimpleName})")
       if !pass.sound then
         throw new AbstractionException(s"pass ${d.kind} is not a sound over-approximation")
+      // per-node passes must match the instruction; slice-actor accepts any
+      // node of the actor and slices the actor as a whole
+      if d.kind != SliceActorPass.kind then
+        val instr = fr.ir.get(d.actor).flatMap(_.get(d.node)).getOrElse(
+          throw new AbstractionException(s"actor \"${d.actor}\" has no instruction ${d.node}"))
+        if !pass.appliesTo(instr) then
+          throw new AbstractionException(
+            s"${d.kind} does not apply to actor ${d.actor} node ${d.node} (${instr.getClass.getSimpleName})")
+      else if !fr.ir.getOrElse(d.actor, mutable.Map.empty).contains(d.node) then
+        throw new AbstractionException(s"actor \"${d.actor}\" has no instruction ${d.node}")
     }
+
+    // ---- slicing: which actors pass the guardrails -------------------------
+    val sliceDecisions = effective.filter(_.kind == SliceActorPass.kind)
+    val (sliceable, sliceRefusals) = sliceableActors(fr, sliceDecisions.map(_.actor))
+    if sliceable.size == sliceDecisions.map(_.actor).distinct.size && sliceable.size == fr.ir.size then
+      throw new AbstractionException("slicing would remove every actor")
 
     // deep-copy the IR (instructions are immutable case classes)
     val ir: mutable.Map[String, mutable.Map[Int, IRInstruction]] =
@@ -135,7 +198,32 @@ object Abstractor {
     }
 
     val applied = List.newBuilder[AppliedDecision]
-    effective.foreach { d =>
+    val refused = List.newBuilder[(NodeDecision, String)]
+    sliceDecisions.foreach { d =>
+      if sliceable.contains(d.actor) then
+        // every send to the sliced actor becomes a skip with the same successor
+        var affected = List.empty[Int]
+        ir.foreach { (sender, instrs) =>
+          if sender != d.actor then
+            instrs.foreach { (id, instr) =>
+              instr match
+                case p: IRQueuePush if queueReceiver(p.queueName) == d.actor =>
+                  instrs(id) = IRSkip(p.id, p.lineNumber, p.scheduler, p.next)
+                  affected ::= id
+                case _ => ()
+            }
+        }
+        ir.remove(d.actor)
+        applied += AppliedDecision(d.actor, d.node, d.kind, affected)
+      else
+        sliceRefusals.find(_._1 == d.actor) match
+          case Some((_, reason)) => refused += ((d, reason))
+          case None => () // duplicate decision for an already-refused actor
+    }
+    val sliced = sliceable
+
+    // ---- per-node passes (decisions for sliced actors are moot) ------------
+    effective.filter(d => d.kind != SliceActorPass.kind && !sliced.contains(d.actor)).foreach { d =>
       val instr = ir(d.actor)(d.node)
       val pass = passByKind(d.kind).get
       val (head, extra) = pass.rewrite(d.actor, instr, nextId)
@@ -144,16 +232,23 @@ object Abstractor {
       applied += AppliedDecision(d.actor, d.node, d.kind, extra.map(_.id))
     }
 
-    val templateSpecs =
-      val dropped = fr.templateSpecs.filter(spec.disableSpecs.contains)
-      dropped.foreach(s => println(s"warning: template spec \"$s\" disabled by the abstraction spec"))
-      fr.templateSpecs.filterNot(spec.disableSpecs.contains)
+    // ---- template specs are meaningless on a sliced model ------------------
+    val disabledSpecs = if sliced.nonEmpty then fr.templateSpecs else Nil
+    if disabledSpecs.nonEmpty then
+      println(s"warning: slicing drops all template specs " +
+        s"(regenerated formulas would silently change meaning): ${disabledSpecs.mkString(", ")}")
+
+    val templateSpecs = if sliced.nonEmpty then Nil
+                        else fr.templateSpecs.filterNot(spec.disableSpecs.contains)
+    spec.disableSpecs.filterNot(fr.templateSpecs.contains).foreach { s =>
+      println(s"warning: disable_specs entry \"$s\" is not an enabled template spec")
+    }
 
     val result = FrontendResult(ir, templateSpecs, fr.userSpecs, fr.labels)
 
     // Postcondition: the abstracted IR must stay structurally valid
     TVIRReader.fromTVIRString(result.toTVIRString)
 
-    AbstractorResult(result, applied.result(), Nil)
+    AbstractorResult(result, applied.result(), refused.result(), disabledSpecs)
   }
 }

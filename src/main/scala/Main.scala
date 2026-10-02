@@ -38,7 +38,7 @@ def abstractResult(res: FrontendResult, output: String, abstractionFile: String)
     Json.JObj(List("actor" -> Json.JStr(d.actor), "node" -> Json.JNum(d.node), "kind" -> Json.JStr(d.kind)))
   def appliedJson(d: AppliedDecision): Json.JValue =
     decisionJson(d.decision) match
-      case Json.JObj(fields) => Json.JObj(fields :+ ("inserted" -> Json.JArr(d.inserted.map(Json.JNum.apply))))
+      case Json.JObj(fields) => Json.JObj(fields :+ ("affected" -> Json.JArr(d.affected.map(Json.JNum.apply))))
       case other => other
   writeFile(s"$output.abs.json", Json.print(Json.JObj(List(
     "format" -> Json.JStr("tvl-abstraction-report/1"),
@@ -47,6 +47,7 @@ def abstractResult(res: FrontendResult, output: String, abstractionFile: String)
       Json.JObj(List("actor" -> Json.JStr(d.actor), "node" -> Json.JNum(d.node),
         "kind" -> Json.JStr(d.kind), "reason" -> Json.JStr(reason)))
     }),
+    "disabled_specs" -> Json.JArr(abs.disabledSpecs.map(Json.JStr.apply)),
   ))) + "\n")
   println(s"Abstraction applied: ${abs.applied.size} decision(s), ${abs.refused.size} refused")
   abs.result
