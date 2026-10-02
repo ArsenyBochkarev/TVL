@@ -345,13 +345,27 @@ def parse_spin_output(target_file, source_map, source_code):
     target_trail = f"{target_file}.trail"
     trace_written = False
 
+    # pan artifacts live in the cwd: wipe leftovers from earlier runs, or a
+    # stale pan.out silently "verifies" the current model with the wrong
+    # generated checker (exactly as dangerous as a stale trail).
+    for stale in ("pan.c", "pan.out", "pan.b", "pan.h", "pan.m", "pan.pre", local_trail):
+        if os.path.exists(stale):
+            os.remove(stale)
+
     for prop in ltl_names:
         header = f" CHECKING PROPERTY: {prop} " if prop else " CHECKING DEFAULT PROPERTIES "
         print(f"\n{'='*20}{header}{'='*20}")
 
         gen_cmd = f"{SPIN_CMD} -a {target_file}"
-        run_cmd(gen_cmd)
-        run_cmd("gcc -O2 pan.c -o pan.out")
+        gen_result = run_cmd(gen_cmd)
+        build_result = run_cmd("gcc -O2 pan.c -o pan.out")
+        if gen_result.returncode != 0 or build_result.returncode != 0:
+            # A failed generation/build must not be mistaken for a verdict:
+            # no "errors: 0" below => FAILED without a trail => the caller
+            # reports an error, not a successful check.
+            print(f"RESULT: FAILED for {prop if prop else 'model'}")
+            print(f"pan generation/build failed (is gcc on PATH?):\n{gen_result.stderr}{build_result.stderr}")
+            continue
         pan_result = run_cmd(f"./pan.out -a -f -N {prop}")
 
         if "errors: 0" in pan_result.stdout:
