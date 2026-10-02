@@ -222,7 +222,8 @@ def main():
             return 0
 
         print(f"[cegar] counterexample found, validating against the concrete model")
-        verdict = validate_trace(trace_json, concrete_tvir, args.channel_size)
+        verdict = validate_trace(trace_json, concrete_tvir, args.channel_size,
+                                 abstraction=abs_report_path)
         if verdict is None:
             print("[cegar] UNKNOWN: could not validate the counterexample")
             history.append({"iteration": it, "verdict": "unknown"})

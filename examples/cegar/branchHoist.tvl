@@ -1,0 +1,23 @@
+module BranchHoist
+
+actor R1 {
+    send X to R2
+    send Y to R3
+    send Y to R3
+}
+
+actor R2 {
+    receive alts {
+        X from R1 => { skip }
+    }
+}
+
+actor R3 {
+    repeat 2 {
+        receive Y from R1
+    }
+}
+
+specs {
+    FinishingProperty;
+}
