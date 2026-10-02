@@ -119,12 +119,10 @@ python3 cegar.py --model src/model.tvl --target spin --validator curtis
   (`<workdir>/abstraction.json`): `auto` kinds (`loop-unroll`: `repeat N` ->
   nondeterministic loop; `branch-hoist`: `receive alts` -> choice with hoisted
   consuming pops) plus a `blacklist` that refinement extends each iteration.
-- Validation (against the CONCRETE model, no model checker internals touched):
-  - `tla` → `utils/tlc_loadtrace.py`: native `tlc -loadTrace json` (precise)
-  - `spin` → `utils/spin_monitor.py`: generated observer proctype
-    (over-approximation; a match is confirmed by Curtis)
-  - fallback → `curtis validate model.tvir trace.json` ([Curtis](https://github.com/ArsenyBochkarev/Curtis)
-    trace replay; also confirms lasso loop closure)
+- Validation is always done by [Curtis](https://github.com/ArsenyBochkarev/Curtis)
+  (`curtis validate`, required on PATH): it replays the counterexample against
+  the concrete `.tvir` on the IR level and understands the branch-hoist
+  instruction projection via `--abstraction` (the applied-decision report).
 - Counterexamples travel in the canonical `tvl-trace/1` JSON written by
   `verifier.py --trace-json <file>` (also usable standalone:
   `./translate model.tvl spin --trace-json=trace.json`).

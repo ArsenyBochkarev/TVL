@@ -4,18 +4,17 @@
 Loop (each iteration permanently blacklists at least one node, so the loop
 terminates in at most (#abstractable nodes + 1) iterations):
 
-    0. concrete.tvir   = frontend dump of the source model (validation target)
-       concrete.<ext>  = translation of the concrete model into the target
-                         language (external validators run the ABSTRACT trace
-                         against THIS model)
-    1. abstract.tvir   = concrete.tvir transformed per abstraction.json
-                         (auto = ["loop-unroll", "branch-hoist"], minus blacklist)
-    2. abstract.<ext>  = translation of the abstract model
+    0. concrete.tvir = frontend dump of the source model (the validation
+                       target and the abstraction input)
+    1. abstract.tvir = concrete.tvir transformed per abstraction.json
+                       (auto = ["loop-unroll", "branch-hoist"], minus blacklist)
+    2. abstract.<ext> = translation of the abstract model into the target
+                       language (SPIN/Promela or TLA+/PlusCal)
     3. verifier.py --trace-json ...  -> verdict + canonical tvl-trace/1
-    4. validate the trace against the CONCRETE model:
-         target=tla  -> utils/tlc_loadtrace.py   (native TLC -loadTrace, precise)
-         target=spin -> utils/spin_monitor.py    (observer proctype, over-approx)
-         fallback    -> curtis validate concrete.tvir trace.json (precise replay)
+    4. curtis validate <concrete.tvir> <trace.json> [--abstraction <abs.json>]
+                       -> precise IR-level replay of the trace against the
+                          CONCRETE model. The only validator: it alone
+                          understands the branch-hoist instruction projection.
     5. spurious -> blacklist the culprit node, goto 1
 
 Exit codes: 0 = VERIFIED (abstract model satisfies all specs; with sound
@@ -37,8 +36,6 @@ SBT_OPTS = ("--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=
             "-XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings "
             "--sun-misc-unsafe-memory-access=allow")
 
-SPIN_MONITOR = os.path.join(REPO_ROOT, "utils", "spin_monitor.py")
-TLC_LOADTRACE = os.path.join(REPO_ROOT, "utils", "tlc_loadtrace.py")
 VERIFIER = os.path.join(REPO_ROOT, "verifier.py")
 
 ABSTRACTION_KINDS = ["loop-unroll", "branch-hoist"]
@@ -104,45 +101,17 @@ def run_validator(cmd):
     return parse_validate_line(r.stdout)
 
 
-def validate_trace(validator, target, trace, concrete_model, concrete_tvir, cap):
-    """Returns the parsed `validate:` line (dict) or None on failure."""
-    cmd = None
-    primary = validator
-    if validator in ("auto", "tlc-loadtrace") and target == "tla":
-        cmd = f"python3 {TLC_LOADTRACE} {trace} {concrete_model}"
-        primary = "tlc-loadtrace"
-    elif validator in ("auto", "spin-monitor") and target == "spin":
-        cmd = f"python3 {SPIN_MONITOR} {trace} {concrete_model}"
-        primary = "spin-monitor"
-    # explicit choice or fallback
-    if cmd is None and validator in ("auto", "curtis"):
-        if shutil.which("curtis"):
-            cmd = f"curtis validate {concrete_tvir} {trace} --channel-size {cap}"
-            primary = "curtis"
-        else:
-            print("warning: curtis not on PATH; no validator ran", file=sys.stderr)
-            return None
-    if cmd is None:
-        print(f"warning: no validator available for target={target}, validator={validator}",
-              file=sys.stderr)
-        return None
-
+def validate_trace(trace, concrete_tvir, cap, abstraction=None):
+    """Replay the trace against the CONCRETE model with curtis; returns the
+    parsed `validate:` line (dict) or None on failure. `abstraction` is the
+    tvl-abstraction-report/1 describing how abstract instructions project onto
+    concrete ones (branch-hoist)."""
+    cmd = f"curtis validate {concrete_tvir} {trace} --channel-size {cap}"
+    if abstraction:
+        cmd += f" --abstraction {abstraction}"
     parsed = run_validator(cmd)
     if parsed is None:
-        print("warning: validator produced no verdict line", file=sys.stderr)
-        return None
-
-    # The spin monitor cannot check lasso loop closure (its feasible only means
-    # the finite part reproduced); confirm with the precise validator.
-    if (parsed["verdict"] == "feasible" and primary == "spin-monitor"
-            and load_json(trace).get("kind") == "lasso"):
-        if shutil.which("curtis"):
-            print("[cegar] lasso: confirming loop closure with curtis validate")
-            confirmed = run_validator(f"curtis validate {concrete_tvir} {trace} --channel-size {cap}")
-            if confirmed is not None:
-                return confirmed
-        print("warning: lasso loop closure NOT confirmed (no precise validator); "
-              "treating the verdict as provisional", file=sys.stderr)
+        print("warning: curtis produced no verdict line", file=sys.stderr)
     return parsed
 
 
@@ -189,13 +158,16 @@ def main():
     ap.add_argument("--iterations", type=int, default=20)
     ap.add_argument("--kinds", default=",".join(ABSTRACTION_KINDS),
                     help="comma-separated auto abstraction kinds")
-    ap.add_argument("--validator", default="auto",
-                    choices=["auto", "tlc-loadtrace", "spin-monitor", "curtis", "none"])
     args = ap.parse_args()
 
     model = os.path.abspath(args.model)
     if not os.path.exists(model):
         print(f"error: model not found: {model}", file=sys.stderr)
+        return 2
+    if not shutil.which("curtis"):
+        print("error: curtis is required for trace validation but is not on PATH "
+              "(build Curtis and `lake run install`, or put the binary on PATH)",
+              file=sys.stderr)
         return 2
     workdir = os.path.abspath(args.workdir or
                               os.path.join(os.path.dirname(model), "cegar-out"))
@@ -203,12 +175,10 @@ def main():
     ext = "pml" if args.target == "spin" else "tla"
     source_file = tvl_source_for(model)
 
-    # ---- Step 0: concrete IR + concrete target model -----------------------
+    # ---- Step 0: the concrete IR (validation target + abstraction input) ----
     concrete_tvir = os.path.join(workdir, "concrete.tvir")
-    concrete_model = os.path.join(workdir, f"concrete.{ext}")
-    print(f"[cegar] translating the concrete model ({args.target})")
+    print(f"[cegar] dumping the concrete IR")
     translate(model, concrete_tvir, "ir", args.channel_size)
-    translate(concrete_tvir, concrete_model, args.target, args.channel_size)
 
     # ---- bootstrap the abstraction sidecar ---------------------------------
     abstraction_json = os.path.join(workdir, "abstraction.json")
@@ -252,9 +222,7 @@ def main():
             return 0
 
         print(f"[cegar] counterexample found, validating against the concrete model")
-        verdict = (validate_trace(args.validator, args.target, trace_json,
-                                  concrete_model, concrete_tvir, args.channel_size)
-                   if args.validator != "none" else None)
+        verdict = validate_trace(trace_json, concrete_tvir, args.channel_size)
         if verdict is None:
             print("[cegar] UNKNOWN: could not validate the counterexample")
             history.append({"iteration": it, "verdict": "unknown"})
