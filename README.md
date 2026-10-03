@@ -64,6 +64,7 @@ translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace
 - `<target>` is `tla` or `spin`, or `curtis`, or `ir`
 - `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
 - `--channel-size` / `--trace-size` set the channel size and counterexample size limits
+- `--cegar` enables the CEGAR loop. See [section below](#cegar) for further info
 - The output file is always written next to the input file
 
 Altough it is highly recommended to use [VS Code plugin](https://github.com/ArsenyBochkarev/tvl-vscode).
@@ -101,6 +102,10 @@ IR line numbers refer to the original TVL source, so counterexample traces for a
 ```bash
 ./translate src/model.tvl curtis  # writes src/model.tvir, verifies it with Curtis
 ```
+
+### CEGAR
+When the full model is slow to verify, one may try to run `./translate <model> <tla|spin> --cegar`
+to try to find early counterexamples instead of the one-shot check. This option requires Curtis to be present on the machine. See the [docs/cegar/cegar.md](docs/cegar/cegar.md) for further details.
 
 ### Run tests
 You can run all tests using:

@@ -1,0 +1,25 @@
+module Collapse
+
+actor A {
+    repeat {
+        send One1 to B
+        send One2 to B
+    }
+}
+
+actor B {
+    repeat {
+        receive alts {
+            One1 from A => { g1: skip }
+            One2 from A => { g2: skip }
+        }
+        receive alts {
+            One1 from A => { done: skip }
+            One2 from A => { done: skip }
+        }
+    }
+}
+
+specs {
+    ltl NotG2: "G !B.g2";
+}

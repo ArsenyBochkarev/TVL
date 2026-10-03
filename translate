@@ -1,24 +1,38 @@
 #!/bin/bash
 
 if [[ "$1" == "-h" || "$1" == "--help" ]]; then
-  echo "Usage: ./translate <input_file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace-size=...]"
+  echo "Usage: ./translate <input_file> <target> [options]"
   echo ""
   echo "Arguments:"
   echo "  <input_file>          Path to the source TVL file or a TVL IR dump (.tvir)."
   echo "                        Output is written next to it."
-  echo "  <target>              Translation target: 'tla', 'spin',"
-  echo "                        'curtis', or 'ir'"
-  echo "                        (frontend-only: write the TVL IR in .tvir text format,"
-  echo "                        see docs/IR/IR.md; no verification is run)."
+  echo "  <target>              Translation target: 'tla', 'spin', 'curtis', or 'ir'"
+  echo ""
+  echo "Options:"
+  echo "  --cegar               Run the CEGAR loop instead of a one-shot verification:"
+  echo "                        abstract -> translate -> verify -> validate (curtis)"
+  echo "                        -> refine, until VERIFIED or a REAL counterexample."
+  echo "                        Only 'tla' and 'spin' targets; requires curtis on PATH."
+  echo "                        Artifacts land in --workdir (default <input dir>/cegar-out)."
   echo "  --dump-ir=...         (Optional) Additionally dump the TVL IR (.tvir text format) to this path."
   echo "  --channel-size=...    (Optional) Channel size limit. Default: 20. (Ignored for 'ir'.)"
   echo "  --trace-size=...      (Optional) Counterexample size limit. Default: 20. (Ignored for 'ir'.)"
+  echo "  --trace-json=...      (Optional) Dump the counterexample in the canonical tvl-trace/1"
+  echo "                        JSON format (for trace validation / CEGAR)."
+  echo "  --no-truncate         (Optional) Do not cut the rendered counterexample at --trace-size."
+  echo "  --workdir=DIR         (--cegar only) Artifacts directory"
+  echo "                        (default: <input dir>/cegar-out)."
+  echo "  --iterations=N        (--cegar only) Refinement budget (default 20); on exhaustion the"
+  echo "                        loop falls back to verifying the concrete model."
+  echo "  --kinds=a,b           (--cegar only) Auto abstraction kinds"
+  echo "                        (default loop-unroll,slice-actor,collapse-messages)."
   echo ""
   echo "Example:"
   echo "  ./translate src/model.tvl tla --channel-size=10"
   echo "  ./translate src/model.tvl ir"
   echo "  ./translate src/model.tvl curtis"
   echo "  ./translate src/model.tvl tla --dump-ir=out/model.tvir"
+  echo "  ./translate src/model.tvl spin --cegar --workdir=out/cegar"
   echo "  ./translate src/model.tvir tla"
   exit 0
 fi
@@ -30,6 +44,69 @@ fi
 
 INPUT=$1
 TARGET=$2
+
+CHANNEL_SIZE=20
+TRACE_SIZE=20
+DUMP_IR="-"
+TRACE_JSON=""
+EXTRA_VERIFIER_ARGS=""
+CEGAR=0
+CEGAR_ARGS=""
+
+shift 2
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --cegar)
+      CEGAR=1
+      ;;
+    --channel-size=*)
+      CHANNEL_SIZE="${1#--channel-size=}"
+      ;;
+    --trace-size=*)
+      TRACE_SIZE="${1#--trace-size=}"
+      ;;
+    --dump-ir=*)
+      DUMP_IR="${1#--dump-ir=}"
+      if [[ -z "$DUMP_IR" ]]; then
+        echo "Error: --dump-ir requires a value."
+        exit 1
+      fi
+      ;;
+    --trace-json=*)
+      TRACE_JSON="${1#--trace-json=}"
+      if [[ -z "$TRACE_JSON" ]]; then
+        echo "Error: --trace-json requires a value."
+        exit 1
+      fi
+      ;;
+    --no-truncate)
+      EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --no-truncate"
+      ;;
+    --workdir=*|--iterations=*|--kinds=*)
+      if [[ -z "${1#*=}" ]]; then
+        echo "Error: ${1%%=*} requires a value."
+        exit 1
+      fi
+      CEGAR_ARGS="$CEGAR_ARGS $1"
+      ;;
+    *)
+      echo "Unknown option: $1"
+      exit 1
+      ;;
+  esac
+  shift
+done
+
+if [[ "$CEGAR" == "0" && -n "$CEGAR_ARGS" ]]; then
+  echo "Error: ${CEGAR_ARGS# } need --cegar."
+  exit 1
+fi
+
+export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
+
+if [[ "$CEGAR" == "1" ]]; then
+  exec sbt -error "runMain main --cegar $INPUT $TARGET --channel-size=$CHANNEL_SIZE --trace-size=$TRACE_SIZE$CEGAR_ARGS"
+fi
 
 # Construct output file name
 if [[ "$TARGET" == "tla" ]]; then
@@ -44,38 +121,7 @@ BASE=$(basename "$INPUT" .tvl)
 BASE=${BASE%.tvir}
 OUTPUT="$DIR/${BASE}.${EXT}"
 
-
-CHANNEL_SIZE=20
-TRACE_SIZE=20
-DUMP_IR="-"
-
-shift 2
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --channel-size=*)
-      CHANNEL_SIZE="${1#--channel-size=}"
-      ;;
-    --trace-size=*)
-      TRACE_SIZE="${1#--trace-size=}"
-      ;;
-    --dump-ir=*)
-      DUMP_IR="${1#--dump-ir=}"
-      if [[ -z "$DUMP_IR" ]]; then
-        echo "Error: --dump-ir requires a value."
-        exit 1
-      fi
-      ;;
-    *)
-      echo "Unknown option: $1"
-      exit 1
-      ;;
-  esac
-  shift
-done
-
-export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
-
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE $DUMP_IR"
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE $DUMP_IR -"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1
@@ -95,6 +141,10 @@ SOURCE_FILE="$INPUT"
 if [[ "$INPUT" == *.tvir ]]; then
   SOURCE_FILE="${INPUT%.tvir}.tvl"
 fi
+EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --channel-size $CHANNEL_SIZE"
+if [[ -n "$TRACE_JSON" ]]; then
+  EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --trace-json $TRACE_JSON"
+fi
 # The channel size limit is consumed by the curtis checker CLI (--channel-size);
-# the tla/spin codegen already embeds it, and verifier.py ignores the extra arg there
-python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $CHANNEL_SIZE
+# the tla/spin codegen already embeds it, and verifier.py ignores the extra flag there
+python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $EXTRA_VERIFIER_ARGS

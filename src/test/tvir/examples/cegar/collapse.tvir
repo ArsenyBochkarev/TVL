@@ -1,0 +1,27 @@
+Actor: A
+  1: IRQueuePush(1,5,(-1,-1),4,Q[B][A],One1)
+  3: IREnd(3,8,(-1,-1))
+  4: IRQueuePush(4,6,(-1,-1),5,Q[B][A],One2)
+  5: IRJump(5,4,(-1,-1),1)
+
+Actor: B
+  6: IRBranch(6,12,(-1,-1),List(QueueCondition(Q[B][A],One1,11), QueueCondition(Q[B][A],One2,13)),None)
+  8: IREnd(8,21,(-1,-1))
+  10: IRBranch(10,16,(-1,-1),List(QueueCondition(Q[B][A],One1,17), QueueCondition(Q[B][A],One2,19)),None)
+  11: IRSkip(11,13,(-1,-1),12)
+  12: IRJump(12,12,(-1,-1),10)
+  13: IRSkip(13,14,(-1,-1),14)
+  14: IRJump(14,12,(-1,-1),10)
+  16: IRJump(16,11,(-1,-1),6)
+  17: IRSkip(17,17,(-1,-1),18)
+  18: IRJump(18,16,(-1,-1),16)
+  19: IRSkip(19,18,(-1,-1),20)
+  20: IRJump(20,16,(-1,-1),16)
+
+User specs:
+  ltl NotG2: G !B.g2
+
+Labels:
+  B.done: 19
+  B.g1: 11
+  B.g2: 13
