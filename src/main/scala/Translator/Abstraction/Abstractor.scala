@@ -62,7 +62,11 @@ object LoopUnrollPass extends AbstractionPass {
   *     would remove behaviors of the receivers - an under-approximation);
   *   - template specs are regenerated from the sliced IR and would silently
   *     change meaning, so applying any slice DROPS them all (reported back,
-  *     the driver reports "verified under the user specs only").
+  *     the driver reports "verified under the user specs only");
+  *   - slicing away every actor is refused wholesale: the empty model
+  *     satisfies any spec and any slice drops the template specs, so the
+  *     verification would be vacuous (sound like any refusal: less
+  *     abstraction).
   *
   * Note the remaining unsoundness gap this pass accepts: removing a send also
   * removes the sender's blocking on a full queue, which can remove stuck
@@ -184,9 +188,19 @@ object Abstractor {
 
     // ---- slicing: which actors pass the guardrails -------------------------
     val sliceDecisions = effective.filter(_.kind == SliceActorPass.kind)
-    val (sliceable, sliceRefusals) = sliceableActors(fr, sliceDecisions.map(_.actor))
-    if sliceable.size == sliceDecisions.map(_.actor).distinct.size && sliceable.size == fr.ir.size then
-      throw new AbstractionException("slicing would remove every actor")
+    val (passing, guardRefusals) = sliceableActors(fr, sliceDecisions.map(_.actor))
+    // Guardrail: slicing away EVERY actor would make the verification vacuous
+    // - the empty model satisfies any spec, and applying ANY slice already
+    // drops all template specs. Refuse the whole pass then. If refinement
+    // blacklists one actor's entry node, sliceable drops below fr.ir.size and
+    // the remaining actors may be sliced in later iterations.
+    val removesEverything =
+      passing.size == sliceDecisions.map(_.actor).distinct.size && passing.size == fr.ir.size
+    val sliceable = if removesEverything then Set.empty[String] else passing
+    val sliceRefusals: List[(String, String)] =
+      if removesEverything then
+        sliceDecisions.map(_.actor).distinct.map(a => (a, "slicing would remove every actor"))
+      else guardRefusals
 
     // deep-copy the IR (instructions are immutable case classes)
     val ir: mutable.Map[String, mutable.Map[Int, IRInstruction]] =

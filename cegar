@@ -16,7 +16,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  --workdir=DIR         Artifacts directory (default: <input dir>/cegar-out)."
   echo "  --channel-size=N      Channel capacity (default 20)."
   echo "  --iterations=N        Refinement budget (default 20)."
-  echo "  --kinds=a,b           Auto abstraction kinds (default loop-unroll,branch-hoist)."
+  echo "  --kinds=a,b           Auto abstraction kinds (default loop-unroll,slice-actor)."
   echo ""
   echo "Requires curtis on PATH (trace validation) and the target checker"
   echo "(tlc/pcal for tla, spin+gcc for spin)."

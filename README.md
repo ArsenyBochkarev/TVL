@@ -129,8 +129,8 @@ external tools (verifier.py, tlc/pcal or spin+gcc, curtis) are subprocesses:
   verification is then over the user specs only.
 - Validation is always done by [Curtis](https://github.com/ArsenyBochkarev/Curtis)
   (`curtis validate`, required on PATH): it replays the counterexample against
-  the concrete `.tvir` on the IR level and understands the branch-hoist
-  instruction projection via `--abstraction` (the applied-decision report).
+  the concrete `.tvir` on the IR level and understands the slice-actor
+  projection via `--abstraction` (the applied-decision report).
 - Counterexamples travel in the canonical `tvl-trace/1` JSON written by
   `verifier.py --trace-json <file>` (also usable standalone:
   `./translate model.tvl spin --trace-json=trace.json`).

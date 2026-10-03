@@ -43,6 +43,23 @@ class AbstractorSuite extends AnyFunSuite {
   private def frontend: FrontendResult =
     FrontendPipeline.run(CharStreams.fromString(src), debug = false)
 
+  // No specs, no labels: every actor passes the per-actor guardrails, so only
+  // the every-actor guardrail stands between slicing and a vacuous model
+  private val bareSrc =
+    """module Bare
+      |
+      |actor A {
+      |    send X to B
+      |}
+      |
+      |actor B {
+      |    receive X from A
+      |}
+      |""".stripMargin
+
+  private def bareFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(bareSrc), debug = false)
+
   private def instrsOf(fr: FrontendResult, actor: String): mutable.Map[Int, IRInstruction] =
     fr.ir(actor)
 
@@ -106,6 +123,30 @@ class AbstractorSuite extends AnyFunSuite {
     assert(out.applied.isEmpty)
     assert(out.refused.exists(_._1.actor == "A"))
     assert(out.refused.head._2.contains("sends"))
+  }
+
+  test("slice-actor refuses everything when slicing would remove every actor") {
+    val fr = bareFrontend
+    // the default CEGAR auto set: no repeat loops, so loop-unroll also finds
+    // nothing - the call must apply nothing and NOT throw
+    val out = Abstractor(fr, AbstractionSpec(Nil, List("loop-unroll", "slice-actor"), Nil, Nil))
+    assert(out.applied.isEmpty)
+    assert(out.refused.map(_._1.actor).sorted == List("A", "B"),
+      "every actor refused exactly once, no duplicates")
+    assert(out.refused.forall(_._2 == "slicing would remove every actor"))
+    assert(out.result.ir.keySet == fr.ir.keySet, "the model must stay intact")
+    assert(out.disabledSpecs.isEmpty && out.result.templateSpecs == fr.templateSpecs)
+    TVIRReader.fromTVIRString(out.result.toTVIRString)
+  }
+
+  test("blacklisting one actor's entry node lets the others be sliced") {
+    val fr = bareFrontend
+    val aEntry = instrsOf(fr, "A").keys.min // the auto slice decision's node
+    val spec = AbstractionSpec(Nil, List("slice-actor"),
+      List(BlacklistEntry("A", aEntry, "spurious at iter 1, step 1")), Nil)
+    val out = Abstractor(fr, spec)
+    assert(out.applied.map(_.actor) == List("B"))
+    assert(!out.result.ir.contains("B") && out.result.ir.contains("A"))
   }
 
   test("slice-actor drops template specs and reports them") {
