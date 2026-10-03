@@ -17,8 +17,8 @@ import scala.util.matching.Regex
 //                         sidecar (auto kinds minus the refinement blacklist)
 //     2. abstract.<ext> = translation of the abstract model (in-process)
 //     3. verifier.py    -> verdict + canonical tvl-trace/1 (subprocess leaf)
-//     4. curtis validate --abstraction <report> -> replay the trace against
-//                         the CONCRETE model (subprocess leaf)
+//     4. curtis validate -> replay the trace against the CONCRETE model
+//                         (subprocess leaf)
 //     5. spurious -> blacklist the culprit node, goto 1
 //
 //   exit 0 -- VERIFIED (abstract model satisfies all specs; with sound
@@ -34,7 +34,7 @@ case class CegarOpts(
   channelSize: Int = 20,
   traceSize: Int = 20,
   iterations: Int = 20,
-  kinds: String = "loop-unroll,slice-actor",
+  kinds: String = "loop-unroll,slice-actor,collapse-messages",
 )
 
 val cegarUsage: String =
@@ -43,6 +43,7 @@ val cegarUsage: String =
   "  --iterations N   refinement budget (default 20; the loop also stops early\n" ++
   "                   when a culprit repeats - no progress is possible)\n" ++
   "  --kinds          comma-separated auto abstraction kinds\n" ++
+  "                   (default loop-unroll,slice-actor,collapse-messages)\n" ++
   "requires: python3 + verifier.py (repo root), tlc/pcal or spin+gcc, curtis on PATH"
 
 def parseCegarArgs(args: Seq[String]): Either[String, CegarOpts] =
@@ -114,8 +115,10 @@ object Verdict:
   * ends the loop as UNKNOWN). Ids are shared between the abstract and concrete
   * IR except for nodes a pass touched beyond its head (reported per decision).
   * Candidates, in order: the verdict's own node (an affected id maps back to
-  * its decision); the LAST trace step executed at an abstracted (or affected)
-  * node; and, as a
+  * its decision; node ids are unique across actors, and model-global passes
+  * like collapse-messages key decisions by class name rather than an actor,
+  * so the lookup ignores the executing actor); the LAST trace step executed
+  * at an abstracted (or affected) node; and, as a
   * last resort so the loop always makes progress while any abstraction is
   * still applied, the last still-applied decision. */
 def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
@@ -124,7 +127,7 @@ def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
   def fresh(c: (String, Int)): Boolean = !blacklisted.contains(c)
   val direct: Option[(String, Int)] = v.node match
     case Some(n) =>
-      applied.find(d => d.actor == v.actor.getOrElse("") && d.affected.contains(n))
+      applied.find(_.affected.contains(n))
         .map(d => (d.actor, d.node))
         .orElse(v.actor.map(a => (a, n)))
     case None => None
@@ -133,7 +136,10 @@ def culpritToConcrete(v: Verdict, applied: List[AppliedDecision],
     case (actor, Some(n)) =>
       abstracted.collectFirst {
         case (a, dn, aff) if actor == a && (n == dn || aff.contains(n)) => (a, dn)
-      }
+      }.orElse(abstracted.collectFirst {
+        // actor-agnostic, same reason as in `direct` (class-keyed decisions)
+        case (a, dn, aff) if n == dn || aff.contains(n) => (a, dn)
+      })
     case _ => None
   }.headOption
   direct.filter(fresh)
@@ -241,7 +247,7 @@ def tvlSourceFor(model: Path): Path =
     println("[cegar] counterexample found, validating against the concrete model")
     val (_, cout) = runCmd(Seq(
       "curtis", "validate", concreteTvir.toString, traceJson.toString,
-      "--channel-size", opts.channelSize.toString, "--abstraction", absReport.toString))
+      "--channel-size", opts.channelSize.toString))
     println(cout)
     val verdict = Verdict.parse(cout).getOrElse {
       die("curtis produced no verdict line", 1)

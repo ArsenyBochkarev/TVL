@@ -21,8 +21,8 @@ case class BlacklistEntry(actor: String, node: Int, reason: String)
   * {
   *   "format": "tvl-abstraction/1",
   *   "decisions": [ { "actor": "R2", "node": 12, "kind": "loop-unroll" } ],
-  *   "auto": [ "loop-unroll", "slice-actor" ],        // kinds applied to every
-  *                                                   // applicable, non-blacklisted node
+  *   "auto": [ "loop-unroll", "slice-actor", "collapse-messages" ],  // kinds applied
+  *                                                                   // to every applicable, non-blacklisted unit
   *   "blacklist": [ { "actor": "R2", "node": 12, "reason": "spurious at iter 1, step 7" } ],
   *   "disable_specs": []
   * }

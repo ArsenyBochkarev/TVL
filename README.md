@@ -124,13 +124,23 @@ external tools (verifier.py, tlc/pcal or spin+gcc, curtis) are subprocesses:
   `slice-actor`: remove an actor the specification does not observe, together
   with every send to it - deletes whole state dimensions; refused with a
   reason when the actor carries labels, is mentioned by a spec, or sends to
-  kept actors) plus a `blacklist` that refinement extends each iteration.
-  Slicing drops template specs (they would silently change meaning); the
+  kept actors; `collapse-messages`: merge messages with the same behavioral
+  fate - the queues they travel and the receive points that match them - into
+  one class message (`One1..One4` -> `One`), so a queue holding k class
+  messages has k+1 contents instead of one per member multiset; merging is
+  refused with a reason when a class member is pushed to a queue where it is
+  not matched, which would delete the unmatched-arrival behavior) plus a
+  `blacklist` that refinement extends each iteration. Collapse decisions are
+  per message class (keyed by the class name), so refinement can drop one
+  class while keeping the others collapsed. Slicing and message-class
+  collapse drop template specs (they would silently change meaning); the
   verification is then over the user specs only.
 - Validation is always done by [Curtis](https://github.com/ArsenyBochkarev/Curtis)
   (`curtis validate`, required on PATH): it replays the counterexample against
-  the concrete `.tvir` on the IR level and understands the slice-actor
-  projection via `--abstraction` (the applied-decision report).
+  the concrete `.tvir` on the IR level, matching each step by `(actor, node)`;
+  a step onto an abstract-only node (e.g. a fresh `IRChoice` introduced by an
+  abstraction) finds no concrete counterpart and is reported spurious - which
+  is exactly what drives refinement.
 - Counterexamples travel in the canonical `tvl-trace/1` JSON written by
   `verifier.py --trace-json <file>` (also usable standalone:
   `./translate model.tvl spin --trace-json=trace.json`).

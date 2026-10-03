@@ -3,6 +3,7 @@ package Translator.Abstraction
 import Translator.Abstraction.AbstractionSpec
 import Translator.Frontend.{FrontendResult, TVIRReader}
 import Translator.IR.*
+import Translator.IR.Lib.QueueCondition
 
 import scala.collection.mutable
 import scala.util.matching.Regex
@@ -28,6 +29,22 @@ trait AbstractionPass {
     * the actor's entry id. */
   def candidateIds(instrs: mutable.Map[Int, IRInstruction]): List[Int] =
     instrs.values.filter(appliesTo).map(_.id).toList.sorted
+
+  /** Model-global passes do not target an (actor, node) pair: one decision
+    * per abstraction unit over the whole model. The decision's `actor` field
+    * carries the unit key (for collapse-messages: the message class name) and
+    * `node` is always 0. */
+  def modelGlobal: Boolean = false
+
+  /** Model-global passes: one decision per abstraction unit. */
+  def globalCandidates(fr: FrontendResult): List[NodeDecision] = Nil
+
+  /** Model-global passes: apply one decision to the live IR map in place.
+    * Right(ids of all touched instructions) or Left(refusal reason) — a
+    * refusal is always sound: less abstraction. */
+  def rewriteModel(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]],
+                   decision: NodeDecision, freshId: () => Int): Either[String, List[Int]] =
+    Left(s"$kind is not a model-global pass")
 }
 
 /** `repeat N` (IRJumpGuard) -> IRChoice{enter body, exit loop}: the unbounded
@@ -82,6 +99,190 @@ object SliceActorPass extends AbstractionPass {
     List(instrs.keys.min)
 }
 
+/** Message-class collapse: messages with the same behavioral fate - the set of
+  * queues they are pushed to and the set of (node, queue) points that match
+  * them - merge into one class message (`One1..One4` -> `One`). Every
+  * IRQueuePush/IRQueuePop and every matching IRBranch case is rewritten to
+  * the class name; several class cases of one alts merge into a single case
+  * whose body is a fresh IRChoice between the original bodies (the targets
+  * resolve alts cases nondeterministically, so the split body set is a plain
+  * union of behaviors - an over-approximation). A queue holding k class
+  * messages then has k+1 distinguishable contents instead of one per member
+  * multiset.
+  *
+  * Soundness conditions (violations are REFUSED with a reason, never silently
+  * skipped):
+  *   - all-or-nothing: for every class S, branch B and queue q, every member
+  *     pushed to q must be matched by B on q. `otherwise` is exclusive-else
+  *     in the targets and an unmatched head is a real "wait" behavior:
+  *     merging would let a classmate match a foreign case and DELETE the
+  *     unmatched-arrival behavior (an under-approximation, a false VERIFIED);
+  *   - a plain receive (IRQueuePop) waits for exactly one member at the head:
+  *     if a classmate is pushed to the same queue the renamed receive would
+  *     eat it, again deleting the wait behavior;
+  *   - template specs are per message and would silently change meaning, so
+  *     applying any collapse DROPS them all (reported back), exactly like
+  *     slicing.
+  *
+  * The fate signature satisfies all-or-nothing by construction (equal matched
+  * sets), so the clustering never proposes an unsound class. The explicit
+  * guardrail re-check at rewrite time is what makes coarser clusterings
+  * (substrings, queues only) safe to experiment with later: soundness lives
+  * in the guardrail, not in the clustering heuristic.
+  *
+  * Decisions are per class - the decision's actor field carries the class
+  * name, node is 0 - so refinement has a real gradient: blacklisting one
+  * class keeps the others collapsed. */
+object CollapseMessagesPass extends AbstractionPass {
+  val kind = "collapse-messages"
+  val sound = true
+  override val modelGlobal: Boolean = true
+
+  /** Where a message travels and where it is matched. */
+  case class Fate(pushed: Set[String], matched: Set[(Int, String)])
+
+  /** A named group of same-fate messages. */
+  case class MessageClass(name: String, members: List[String])
+
+  def fates(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]]): Map[String, Fate] = {
+    val pushed = mutable.Map.empty[String, Set[String]]
+    val matched = mutable.Map.empty[String, Set[(Int, String)]]
+    for (_, instrs) <- ir.toList.sortBy(_._1); (_, i) <- instrs.toList.sortBy(_._1) do
+      i match
+        case p: IRQueuePush => pushed(p.msg) = pushed.getOrElse(p.msg, Set.empty) + p.queueName
+        case o: IRQueuePop  => matched(o.msg) = matched.getOrElse(o.msg, Set.empty) + ((o.id, o.queueName))
+        case b: IRBranch =>
+          b.cases.foreach(c => matched(c.msg) = matched.getOrElse(c.msg, Set.empty) + ((b.id, c.queueName)))
+        case _ => ()
+    (pushed.keySet ++ matched.keySet).map { m =>
+      m -> Fate(pushed.getOrElse(m, Set.empty), matched.getOrElse(m, Set.empty))
+    }.toMap
+  }
+
+  private def longestCommonPrefix(ms: List[String]): String =
+    ms.foldLeft(ms.head) { (acc, m) =>
+      acc.take(acc.zip(m).takeWhile(p => p._1 == p._2).length)
+    }
+
+  /** Messages grouped by fate into classes of two or more, named by the
+    * longest common prefix of the members (extended with `_` until fresh wrt
+    * every message and class name in the model). Deterministic. */
+  def classes(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]]): List[MessageClass] = {
+    val fs = fates(ir)
+    val taken = mutable.SortedSet.empty[String] ++ fs.keySet
+    fs.toList.groupBy(_._2)
+      .map((_, ms) => ms.map(_._1).sorted)
+      .filter(_.size > 1).toList.sortBy(_.mkString("\u0000"))
+      .map { members =>
+        var name = longestCommonPrefix(members)
+        if name.isEmpty then name = "cls"
+        while taken.contains(name) do name += "_"
+        taken += name
+        MessageClass(name, members)
+      }
+  }
+
+  override def globalCandidates(fr: FrontendResult): List[NodeDecision] =
+    classes(fr.ir).map(c => NodeDecision(c.name, 0, kind))
+
+  /** The all-or-nothing guardrail checked against the live IR: None when
+    * merging `members` into one message is a sound over-approximation. */
+  def guardrailViolation(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]],
+                         members: Set[String]): Option[String] = {
+    val pushedTo = mutable.Map.empty[String, Set[String]] // queue -> members pushed there
+    for (_, instrs) <- ir.toList.sortBy(_._1); (_, i) <- instrs.toList.sortBy(_._1) do
+      i match
+        case p: IRQueuePush if members(p.msg) =>
+          pushedTo(p.queueName) = pushedTo.getOrElse(p.queueName, Set.empty) + p.msg
+        case _ => ()
+    val violations = List.newBuilder[String]
+    for ((actor, instrs) <- ir.toList.sortBy(_._1); (id, i) <- instrs.toList.sortBy(_._1)) do
+      i match
+        case b: IRBranch =>
+          b.cases.groupBy(_.queueName).foreach { (q, cs) =>
+            val pushed = pushedTo.getOrElse(q, Set.empty)
+            val cased = cs.map(_.msg).toSet intersect members
+            val unmatched = pushed diff cased
+            if cased.nonEmpty && unmatched.nonEmpty then
+              violations += s"message(s) ${unmatched.toList.sorted.mkString(", ")} are pushed to $q but not " +
+                s"matched by the receive alts at ${actor}@$id; merging would delete the unmatched-arrival " +
+                "behavior (the class case would swallow the classmate)"
+          }
+        case o: IRQueuePop if members(o.msg) =>
+          val classmates = pushedTo.getOrElse(o.queueName, Set.empty) - o.msg
+          if classmates.nonEmpty then
+            violations += s"${o.msg} is consumed by a plain receive at ${actor}@$id but classmate(s) " +
+              s"${classmates.toList.sorted.mkString(", ")} are pushed to ${o.queueName}; the renamed receive " +
+              "would eat them"
+        case _ => ()
+    violations.result().headOption
+  }
+
+  override def rewriteModel(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]],
+                            decision: NodeDecision,
+                            freshId: () => Int): Either[String, List[Int]] =
+    classes(ir).find(_.name == decision.actor) match
+      case None =>
+        Left(s"message class \"${decision.actor}\" does not exist in the current model " +
+          "(other abstractions applied in this run may have changed it)")
+      case Some(cls) =>
+        guardrailViolation(ir, cls.members.toSet) match
+          case Some(reason) => Left(reason)
+          case None => Right(applyClass(ir, cls, freshId))
+
+  private def applyClass(ir: mutable.Map[String, mutable.Map[Int, IRInstruction]],
+                         cls: MessageClass, freshId: () => Int): List[Int] = {
+    val members = cls.members.toSet
+    val affected = List.newBuilder[Int]
+    for (_, instrs) <- ir.toList.sortBy(_._1) do
+      for (id, i) <- instrs.toList.sortBy(_._1) do
+        i match
+          case p: IRQueuePush if members(p.msg) =>
+            instrs(id) = p.copy(msg = cls.name)
+            affected += id
+          case o: IRQueuePop if members(o.msg) =>
+            // unreachable while clustering is the fate signature (a pop point
+            // is unique to one message, so popped messages never share a
+            // class); kept so the rename stays total under coarser clusterings
+            instrs(id) = o.copy(msg = cls.name)
+            affected += id
+          case b: IRBranch =>
+            val classCases = b.cases.zipWithIndex.filter((c, _) => members(c.msg))
+            if classCases.nonEmpty then
+              val byQueue = classCases.groupMap(_._1.queueName)(_._2)
+              val drop = mutable.Set.empty[Int]
+              val replace = mutable.Map.empty[Int, QueueCondition]
+              val choices = List.newBuilder[IRInstruction]
+              for (q, idxs) <- byQueue.toList.sortBy(_._1) do
+                val first = idxs.min
+                val bodies = idxs.sorted.map(i => b.cases(i).bodyStart).distinct
+                val bodyStart =
+                  if bodies.size > 1 then
+                    val c = IRChoice(freshId(), b.lineNumber, b.scheduler, bodies)
+                    choices += c
+                    c.id
+                  else bodies.head
+                replace(first) = QueueCondition(q, cls.name, bodyStart)
+                drop ++= idxs.filter(_ != first)
+              val newCases = b.cases.zipWithIndex.collect {
+                case (_, i) if replace.contains(i) => replace(i)
+                case (c, i) if !drop.contains(i)   => c
+              }
+              instrs(id) = b.copy(cases = newCases)
+              affected += id
+              // the class-case bodies are part of the decision's footprint: a
+              // spurious counterexample routed through a merged body must map
+              // back to this decision when the driver refines
+              classCases.map(_._1.bodyStart).distinct.foreach(affected += _)
+              choices.result().foreach { c =>
+                instrs(c.id) = c
+                affected += c.id
+              }
+          case _ => ()
+    affected.result()
+  }
+}
+
 /** A decision that was applied: the concrete node it targeted, plus the ids of
   * instructions the pass touched besides the head (for slice-actor: the
   * replaced send nodes). The driver maps trace culprits at those ids back to
@@ -96,7 +297,7 @@ case class AbstractorResult(result: FrontendResult,
                             disabledSpecs: List[String])
 
 object Abstractor {
-  val passes: List[AbstractionPass] = List(LoopUnrollPass, SliceActorPass)
+  val passes: List[AbstractionPass] = List(LoopUnrollPass, SliceActorPass, CollapseMessagesPass)
 
   def passByKind(kind: String): Option[AbstractionPass] = passes.find(_.kind == kind)
 
@@ -113,7 +314,8 @@ object Abstractor {
     passByKind(kind) match
       case None => throw new AbstractionException(s"unknown abstraction kind \"$kind\"")
       case Some(pass) =>
-        fr.ir.toList.sortBy(_._1).flatMap { (actor, instrs) =>
+        if pass.modelGlobal then pass.globalCandidates(fr)
+        else fr.ir.toList.sortBy(_._1).flatMap { (actor, instrs) =>
           pass.candidateIds(instrs).map(id => NodeDecision(actor, id, kind))
         }
 
@@ -174,9 +376,15 @@ object Abstractor {
         throw new AbstractionException(s"unknown abstraction kind \"${d.kind}\" (actor ${d.actor}, node ${d.node})"))
       if !pass.sound then
         throw new AbstractionException(s"pass ${d.kind} is not a sound over-approximation")
+      if pass.modelGlobal then
+        // model-global passes are keyed by their unit (message class), not by a node
+        if d.node != 0 then
+          throw new AbstractionException(s"${d.kind} decisions must carry node 0, got ${d.node}")
+        if !pass.globalCandidates(fr).exists(_.actor == d.actor) then
+          throw new AbstractionException(s"unknown message class \"${d.actor}\" for ${d.kind}")
       // per-node passes must match the instruction; slice-actor accepts any
       // node of the actor and slices the actor as a whole
-      if d.kind != SliceActorPass.kind then
+      else if d.kind != SliceActorPass.kind then
         val instr = fr.ir.get(d.actor).flatMap(_.get(d.node)).getOrElse(
           throw new AbstractionException(s"actor \"${d.actor}\" has no instruction ${d.node}"))
         if !pass.appliesTo(instr) then
@@ -237,7 +445,9 @@ object Abstractor {
     val sliced = sliceable
 
     // ---- per-node passes (decisions for sliced actors are moot) ------------
-    effective.filter(d => d.kind != SliceActorPass.kind && !sliced.contains(d.actor)).foreach { d =>
+    effective.filter(d => d.kind != SliceActorPass.kind
+      && !passByKind(d.kind).exists(_.modelGlobal)
+      && !sliced.contains(d.actor)).foreach { d =>
       val instr = ir(d.actor)(d.node)
       val pass = passByKind(d.kind).get
       val (head, extra) = pass.rewrite(d.actor, instr, nextId)
@@ -246,13 +456,29 @@ object Abstractor {
       applied += AppliedDecision(d.actor, d.node, d.kind, extra.map(_.id))
     }
 
-    // ---- template specs are meaningless on a sliced model ------------------
-    val disabledSpecs = if sliced.nonEmpty then fr.templateSpecs else Nil
+    // ---- model-global passes (message-class collapse), on the live IR ------
+    // classes are recomputed after slicing/unrolling, so the fate signature
+    // always matches the model the rewrite actually touches
+    var collapsed = false
+    effective.filter(d => passByKind(d.kind).exists(_.modelGlobal)).foreach { d =>
+      val pass = passByKind(d.kind).get
+      pass.rewriteModel(ir, d, nextId) match
+        case Right(affected) =>
+          applied += AppliedDecision(d.actor, d.node, d.kind, affected)
+          collapsed = true
+        case Left(reason) =>
+          refused += ((d, reason))
+    }
+
+    // ---- template specs are meaningless on a sliced or collapsed model -----
+    val droppedBy = List("slicing" -> sliced.nonEmpty, "message-class collapse" -> collapsed)
+      .filter(_._2).map(_._1)
+    val disabledSpecs = if droppedBy.nonEmpty then fr.templateSpecs else Nil
     if disabledSpecs.nonEmpty then
-      println(s"warning: slicing drops all template specs " +
+      println(s"warning: ${droppedBy.mkString(" + ")} drops all template specs " +
         s"(regenerated formulas would silently change meaning): ${disabledSpecs.mkString(", ")}")
 
-    val templateSpecs = if sliced.nonEmpty then Nil
+    val templateSpecs = if droppedBy.nonEmpty then Nil
                         else fr.templateSpecs.filterNot(spec.disableSpecs.contains)
     spec.disableSpecs.filterNot(fr.templateSpecs.contains).foreach { s =>
       println(s"warning: disable_specs entry \"$s\" is not an enabled template spec")

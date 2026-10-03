@@ -229,6 +229,8 @@ def export_tla_trace(dump_path, model_file, tlc_output):
         print(f"Warning: could not read TLC trace dump {dump_path}: {e}")
         return
     ce = ce_doc.get("counterexample")
+    if not ce and isinstance(ce_doc, dict) and ("action" in ce_doc or "state" in ce_doc):
+        ce = ce_doc  # some TLC versions dump the counterexample object unwrapped
     if not ce:
         return  # no counterexample dumped (verification succeeded)
     steps, loop_start = tla_ce_steps(ce)

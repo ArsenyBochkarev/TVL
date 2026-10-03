@@ -60,6 +60,118 @@ class AbstractorSuite extends AnyFunSuite {
   private def bareFrontend: FrontendResult =
     FrontendPipeline.run(CharStreams.fromString(bareSrc), debug = false)
 
+  // A sends two same-fate messages, B's alts matches both of them (plus a
+  // never-pushed Data in between); {One1, One2} is a sound class
+  private val collapseSrc =
+    """module Collapse
+      |
+      |actor A {
+      |    send One1 to B
+      |    send One2 to B
+      |}
+      |
+      |actor B {
+      |    receive alts {
+      |        One1 from A => { got1: skip }
+      |        Data from A => { gotD: skip }
+      |        One2 from A => { got2: skip }
+      |    }
+      |}
+      |""".stripMargin
+
+  private def collapseFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(collapseSrc), debug = false)
+
+  // One2 is pushed to the queue but never matched by the alts: merging would
+  // delete the unmatched-arrival (wait) behavior - the guardrail's exhibit A
+  private val unmatchedSrc =
+    """module Unmatched
+      |
+      |actor A {
+      |    send One1 to B
+      |    send One2 to B
+      |}
+      |
+      |actor B {
+      |    receive alts {
+      |        One1 from A => { got1: skip }
+      |    }
+      |}
+      |""".stripMargin
+
+  private def unmatchedFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(unmatchedSrc), debug = false)
+
+  // One1 is consumed by a plain receive: the renamed receive would eat One2
+  private val plainReceiveSrc =
+    """module PlainReceive
+      |
+      |actor A {
+      |    send One1 to B
+      |    send One2 to B
+      |}
+      |
+      |actor B {
+      |    receive One1 from A
+      |    receive alts {
+      |        One2 from A => { got2: skip }
+      |    }
+      |}
+      |""".stripMargin
+
+  private def plainReceiveFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(plainReceiveSrc), debug = false)
+
+  // two independent classes on two queues: the refinement gradient unit
+  private val twoClassesSrc =
+    """module TwoClasses
+      |
+      |actor A {
+      |    send One1 to B
+      |    send One2 to B
+      |    send Win1 to C
+      |    send Win2 to C
+      |}
+      |
+      |actor B {
+      |    receive alts {
+      |        One1 from A => { b1: skip }
+      |        One2 from A => { b2: skip }
+      |    }
+      |}
+      |
+      |actor C {
+      |    receive alts {
+      |        Win1 from A => { c1: skip }
+      |        Win2 from A => { c2: skip }
+      |    }
+      |}
+      |""".stripMargin
+
+  private def twoClassesFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(twoClassesSrc), debug = false)
+
+  // the class LCP "One" collides with a real message name and must be extended
+  private val nameClashSrc =
+    """module NameClash
+      |
+      |actor A {
+      |    send One to B
+      |    send One1 to B
+      |    send One2 to B
+      |}
+      |
+      |actor B {
+      |    receive alts {
+      |        One1 from A => { b1: skip }
+      |        One2 from A => { b2: skip }
+      |    }
+      |}
+      |""".stripMargin
+
+  private def nameClashFrontend: FrontendResult =
+    FrontendPipeline.run(CharStreams.fromString(nameClashSrc), debug = false)
+
   private def instrsOf(fr: FrontendResult, actor: String): mutable.Map[Int, IRInstruction] =
     fr.ir(actor)
 
@@ -147,6 +259,95 @@ class AbstractorSuite extends AnyFunSuite {
     val out = Abstractor(fr, spec)
     assert(out.applied.map(_.actor) == List("B"))
     assert(!out.result.ir.contains("B") && out.result.ir.contains("A"))
+  }
+
+  test("collapse-messages merges a class into one case with a fresh IRChoice") {
+    val fr = collapseFrontend
+    val origBranch = firstOf(fr, "B") { case _: IRBranch => true; case _ => false }.asInstanceOf[IRBranch]
+    val classBodies = List(origBranch.cases.head.bodyStart, origBranch.cases(2).bodyStart) // One1, One2 cases
+
+    val out = Abstractor(fr, AbstractionSpec(Nil, List("collapse-messages"), Nil, Nil))
+    assert(out.refused.isEmpty)
+    assert(out.applied.map(d => (d.actor, d.node, d.kind)) == List(("One", 0, "collapse-messages")))
+
+    // both pushes renamed
+    assert(instrsOf(out.result, "A").values.collect { case p: IRQueuePush => p.msg }.toSet == Set("One"))
+    // the two class cases merge into one; the interleaved Data case is untouched
+    val branch = firstOf(out.result, "B") { case _: IRBranch => true; case _ => false }.asInstanceOf[IRBranch]
+    assert(branch.cases.map(_.msg) == List("One", "Data"))
+    assert(branch.cases(1) == origBranch.cases(1))
+    // the merged body is a fresh IRChoice between the original case bodies
+    val choiceId = branch.cases.head.bodyStart
+    val choice = instrsOf(out.result, "B")(choiceId).asInstanceOf[IRChoice]
+    assert(choice.branches == classBodies)
+    // the report covers every touched node: the pushes, the branch, the choice
+    // and the merged bodies (a spurious counterexample through a body must map
+    // back to the class decision when refining)
+    val affected = out.applied.head.affected.toSet
+    val pushIds = instrsOf(fr, "A").values.collect { case p: IRQueuePush => p.id }.toSet
+    assert(pushIds.subsetOf(affected) && affected.contains(origBranch.id) && affected.contains(choiceId))
+    assert(classBodies.toSet.subsetOf(affected))
+    assert(affected.size == pushIds.size + 4)
+    TVIRReader.fromTVIRString(out.result.toTVIRString)
+  }
+
+  test("collapse-messages never proposes a class with an unmatched member") {
+    // One2 is pushed but not matched: its fate differs from One1's, so the
+    // fate clustering yields no class at all - nothing applied, nothing refused
+    val out = Abstractor(unmatchedFrontend, AbstractionSpec(Nil, List("collapse-messages"), Nil, Nil))
+    assert(out.applied.isEmpty && out.refused.isEmpty)
+    // the all-or-nothing guardrail is the explicit invariant behind that: it
+    // flags the same IR should a coarser clustering ever propose the class
+    val violation = CollapseMessagesPass.guardrailViolation(unmatchedFrontend.ir, Set("One1", "One2"))
+    assert(violation.exists(_.contains("not matched")))
+  }
+
+  test("a plain receive blocks its message from any class") {
+    // the renamed receive would eat the classmate at the queue head
+    val violation = CollapseMessagesPass.guardrailViolation(plainReceiveFrontend.ir, Set("One1", "One2"))
+    assert(violation.exists(_.contains("plain receive")))
+    // and the fate signature (a pop point is unique to one message) never
+    // proposes the class in the first place
+    val out = Abstractor(plainReceiveFrontend, AbstractionSpec(Nil, List("collapse-messages"), Nil, Nil))
+    assert(out.applied.isEmpty && out.refused.isEmpty)
+  }
+
+  test("blacklisting one class keeps the others collapsed") {
+    val spec = AbstractionSpec(Nil, List("collapse-messages"),
+      List(BlacklistEntry("One", 0, "spurious at iter 1, step 3")), Nil)
+    val out = Abstractor(twoClassesFrontend, spec)
+    assert(out.applied.map(_.actor) == List("Win"))
+    // One's members keep their names, Win's are renamed
+    assert(instrsOf(out.result, "A").values.collect { case p: IRQueuePush => p.msg }.toSet ==
+      Set("One1", "One2", "Win"))
+  }
+
+  test("class name extends the longest common prefix until fresh") {
+    // the LCP of {One1, One2} is "One", which is itself a message here
+    val out = Abstractor(nameClashFrontend, AbstractionSpec(Nil, List("collapse-messages"), Nil, Nil))
+    assert(out.applied.map(_.actor) == List("One_"))
+    assert(instrsOf(out.result, "A").values.collect { case p: IRQueuePush => p.msg }.toSet ==
+      Set("One", "One_", "One_"))
+  }
+
+  test("collapse-messages drops template specs and reports them") {
+    val withTemplate = FrontendResult(collapseFrontend.ir, List("FinishingProperty"),
+      collapseFrontend.userSpecs, collapseFrontend.labels)
+    val out = Abstractor(withTemplate, AbstractionSpec(Nil, List("collapse-messages"), Nil, Nil))
+    assert(out.applied.map(_.actor) == List("One"))
+    assert(out.disabledSpecs == List("FinishingProperty"))
+    assert(out.result.templateSpecs.isEmpty)
+  }
+
+  test("collapse-messages decisions with a wrong shape are hard errors") {
+    val e1 = intercept[AbstractionException] {
+      Abstractor(collapseFrontend, specOf(NodeDecision("Nope", 0, "collapse-messages")))
+    }
+    assert(e1.getMessage.contains("unknown message class"))
+    val e2 = intercept[AbstractionException] {
+      Abstractor(collapseFrontend, specOf(NodeDecision("One", 7, "collapse-messages")))
+    }
+    assert(e2.getMessage.contains("node 0"))
   }
 
   test("slice-actor drops template specs and reports them") {
