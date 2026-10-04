@@ -35,18 +35,16 @@ class IntegrationIRSpec extends AnyFunSuite {
       // Convert IR to string format
       val irString = res.toTVIRString
 
-      if (Files.exists(irFilePath)) {
+      if (sys.env.contains("UPDATE_GOLDEN_FILES")) {
+        // Generate or overwrite the .tvir file with the current IR.
+        Files.createDirectories(irFilePath.getParent)
+        Files.writeString(irFilePath, irString)
+        println(s"Generated $irFilePath")
+      } else if (Files.exists(irFilePath)) {
         val expectedIrString = Files.readString(irFilePath)
         assert(irString == expectedIrString, s"Generated IR for ${tvlFile.getName} does not match expected output in $irFilePath")
       } else {
-        if (sys.env.contains("UPDATE_GOLDEN_FILES")) {
-          // Generate the .tvir file if it doesn't exist
-          Files.createDirectories(irFilePath.getParent)
-          Files.writeString(irFilePath, irString)
-          println(s"Generated $irFilePath")
-        } else {
-          fail(s"Expected IR file does not exist: $irFilePath. Set UPDATE_GOLDEN_FILES=1 to generate it.")
-        }
+        fail(s"Expected IR file does not exist: $irFilePath. Set UPDATE_GOLDEN_FILES=1 to generate it.")
       }
     }
   }
