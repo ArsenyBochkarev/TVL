@@ -39,24 +39,28 @@ ENV ELAN_HOME=/opt/elan
 ENV PATH="/opt/elan/bin:${PATH}"
 RUN curl -sSfL https://elan.lean-lang.org/elan-init.sh | sh -s -- -y --default-toolchain none
 
-# Build Curtis; lake resolves the pinned Lean toolchain and Mathlib from the
-# repo's lean-toolchain + lake-manifest.json.
+# Build Curtis; lake resolves the pinned Lean toolchain from the repo's
+# lean-toolchain file. test -x fails the build right away if the binary did
+# not end up where we expect (ln -s alone would happily create a dangling
+# symlink that only blows up as "curtis: not found" at runtime).
 ARG CURTIS_REF=main
 RUN git clone https://github.com/ArsenyBochkarev/Curtis.git /opt/tools/Curtis && \
     cd /opt/tools/Curtis && \
     git checkout ${CURTIS_REF} && \
     lake build && \
+    lake run install && \
+    test -x .lake/build/bin/curtis && \
     ln -s /opt/tools/Curtis/.lake/build/bin/curtis /usr/local/bin/curtis
 
 # Create a local user whose UID/GID match the host (passed via build args)
 ARG UID=1000
 ARG GID=1000
-RUN groupadd --gid ${GID} dev && \
-    useradd --create-home --uid ${UID} --gid dev --shell /bin/bash dev
+RUN if ! getent group "${GID}" >/dev/null; then groupadd --gid "${GID}" dev; fi && \
+    if ! getent passwd "${UID}" >/dev/null; then useradd --create-home --uid "${UID}" --gid "${GID}" --shell /bin/bash dev; fi
 
 # Set working directory
 WORKDIR /app
-RUN chown dev:dev /app
+RUN chown "${UID}:${GID}" /app
 
 # The environment variables for antlr (to use from scripts if needed)
 ENV ANTLR_JAR=/opt/tools/antlr.jar
