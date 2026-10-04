@@ -11,9 +11,15 @@ MAX_TRACE_STEPS = 20
 #   --trace-json <file>  dump the counterexample in the canonical `tvl-trace/1` format
 #   --no-truncate        do not cut console trace rendering at MAX_TRACE_STEPS
 #   --channel-size <n>   channel capacity to stamp into the trace (source of truth: translate)
+#   --fairness <mode>    fairness for verification: weak (default) | strong | none.
+#                        tla: already baked into the generated model (fair/fair+);
+#                        spin: the pan -f flag (weak) or no flag (none; strong is
+#                        rejected - SPIN has no strong fairness);
+#                        curtis: --weak-fairness / --strong-fairness / no flag
 TRACE_JSON_FILE = None
 NO_TRUNCATE = False
 CHANNEL_SIZE = None
+FAIRNESS = "weak"
 
 PCAL_CMD = f"pcal"
 TLC_CMD = f"tlc"
@@ -368,7 +374,10 @@ def parse_spin_output(target_file, source_map, source_code):
             print(f"RESULT: FAILED for {prop if prop else 'model'}")
             print(f"pan generation/build failed (is gcc on PATH?):\n{gen_result.stderr}{build_result.stderr}")
             continue
-        pan_result = run_cmd(f"./pan.out -a -f -N {prop}")
+        # -f: accept only weakly fair execution sequences (pan flag); "none"
+        # checks all paths, "strong" never reaches here (rejected in __main__)
+        fair_flag = " -f" if FAIRNESS == "weak" else ""
+        pan_result = run_cmd(f"./pan.out -a{fair_flag} -N {prop}")
 
         if "errors: 0" in pan_result.stdout:
             print(f"RESULT: SUCCESS for {prop if prop else 'model'}")
@@ -415,7 +424,12 @@ def parse_curtis_output(model_file, channel_size, max_steps):
     ([ltl|ctl] <name>: HOLDS|VIOLATED) plus counterexample traces — relay them
     as-is, truncating counterexample steps at max_steps (--trace-size), like the
     tla/spin trace rendering. Exit codes: 0 all specs hold, 1 some spec violated, 2 error."""
-    result = run_cmd(f"{CURTIS_CMD} --channel-size {channel_size} {model_file}")
+    cmd = f"{CURTIS_CMD} --channel-size {channel_size}"
+    if FAIRNESS == "weak":
+        cmd += " --weak-fairness"
+    elif FAIRNESS == "strong":
+        cmd += " --strong-fairness"
+    result = run_cmd(f"{cmd} {model_file}")
     if result.stdout:
         step_re = re.compile(r"^    \d+\. ")
         in_cex, printed, truncated = False, 0, False
@@ -442,7 +456,8 @@ def parse_curtis_output(model_file, channel_size, max_steps):
 
 
 def parse_flags(argv):
-    """Split positional args from optional flags (--trace-json, --no-truncate, --channel-size)."""
+    """Split positional args from optional flags (--trace-json, --no-truncate,
+    --channel-size, --fairness)."""
     positional, flags, i = [], {}, 0
     while i < len(argv):
         a = argv[i]
@@ -452,6 +467,8 @@ def parse_flags(argv):
             flags["no_truncate"] = True; i += 1
         elif a == "--channel-size" and i + 1 < len(argv):
             flags["channel_size"] = int(argv[i + 1]); i += 2
+        elif a == "--fairness" and i + 1 < len(argv):
+            flags["fairness"] = argv[i + 1]; i += 2
         else:
             positional.append(a); i += 1
     return positional, flags
@@ -462,10 +479,14 @@ if __name__ == "__main__":
     NO_TRUNCATE = flags.get("no_truncate", False)
     # Used by curtis only (passed to its CLI); the tla/spin codegen already embeds it
     CHANNEL_SIZE = flags.get("channel_size", 20)
+    FAIRNESS = flags.get("fairness", "weak")
 
     if len(positional) < 5:
         print("Usage: python verifier.py <tla|spin|curtis> <model_file> <tvl source file> <line mapping file> <trace size>"
-              " [--trace-json <file>] [--no-truncate] [--channel-size <n>]")
+              " [--trace-json <file>] [--no-truncate] [--channel-size <n>] [--fairness <weak|strong|none>]")
+        sys.exit(1)
+    if FAIRNESS not in ("weak", "strong", "none"):
+        print(f"Error: invalid --fairness '{FAIRNESS}' (weak|strong|none)")
         sys.exit(1)
 
     target, model_file, source_file, map_file, trace_size = positional[0], positional[1], positional[2], positional[3], int(positional[4])
@@ -488,6 +509,9 @@ if __name__ == "__main__":
         if TRACE_JSON_FILE and tlc_dump:
             export_tla_trace(tlc_dump, model_file, output)
     elif target == "spin":
+        if FAIRNESS == "strong":
+            print("Error: SPIN does not support strong fairness (use weak or none)")
+            sys.exit(1)
         parse_spin_output(model_file, source_map, source_code)
     elif target == "curtis":
         parse_curtis_output(model_file, CHANNEL_SIZE, MAX_TRACE_STEPS)

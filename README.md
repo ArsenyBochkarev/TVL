@@ -65,6 +65,7 @@ translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace
 - `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
 - `--channel-size` / `--trace-size` set the channel size and counterexample size limits
 - `--cegar` enables the CEGAR loop. See [section below](#cegar) for further info
+- `--fairness=weak|strong|none` sets the fairness for all actors (default: `weak`)
 - The output file is always written next to the input file
 
 Altough it is highly recommended to use [VS Code plugin](https://github.com/ArsenyBochkarev/tvl-vscode).

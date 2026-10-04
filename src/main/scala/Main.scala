@@ -55,11 +55,17 @@ def abstractResult(res: FrontendResult, output: String, abstractionFile: String)
   abs.result
 }
 
-def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int, abstractionFile: String = "-"): Unit = {
+def parse(input: String, output: String, target: String, dumpIrPath: String, debug: Boolean, channelSizeLimit: Int, abstractionFile: String = "-", fairness: String = "weak"): Unit = {
   val isIrTarget = target == "ir"
   if !isIrTarget && !targetIsValid(target) then
     println(s"Error: Invalid target \"$target\". Use \"tla\", \"spin\", \"curtis\" or \"ir\"")
     System.exit(1)
+  if !Seq("weak", "strong", "none").contains(fairness) then
+    println(s"Error: invalid fairness \"$fairness\". Use \"weak\", \"strong\" or \"none\"")
+    System.exit(2)
+  if target == "spin" && fairness == "strong" then
+    println("Error: strong fairness is not supported by the SPIN target (weak or none)")
+    System.exit(2)
 
   val res = abstractResult(loadFrontendResult(input, debug), output, abstractionFile)
 
@@ -83,6 +89,7 @@ def parse(input: String, output: String, target: String, dumpIrPath: String, deb
   translator.setEnabledProperties(res.templateSpecs)
   translator.setUserLabels(res.labels)
   translator.setChannelSizeLimit(channelSizeLimit)
+  translator.setFairness(fairness)
 
   val code = translator.translate(res.ir)
   val writer = new PrintWriter(new File(output))
@@ -133,6 +140,7 @@ case class CegarOpts(
   traceSize: Int = 20,
   iterations: Int = 20,
   kinds: String = "loop-unroll,slice-actor,collapse-messages",
+  fairness: String = "weak",
 )
 
 val cegarUsage: String =
@@ -143,6 +151,8 @@ val cegarUsage: String =
   "                   verifying the concrete model)\n" ++
   "  --kinds          comma-separated auto abstraction kinds\n" ++
   "                   (default loop-unroll,slice-actor,collapse-messages)\n" ++
+  "  --fairness F     fairness for verification: weak | strong | none\n" ++
+  "                   (default weak; the SPIN target rejects strong)\n" ++
   "requires: python3 + verifier.py (repo root), tlc/pcal or spin+gcc, curtis on PATH"
 
 /** Parses `--flag value` and `--flag=value` forms alike. */
@@ -158,6 +168,7 @@ def parseCegarArgs(raw: Seq[String]): Either[String, CegarOpts] =
     "--target" -> (v => o => o.copy(target = v)),
     "--workdir" -> (v => o => o.copy(workdir = v)),
     "--kinds" -> (v => o => o.copy(kinds = v)),
+    "--fairness" -> (v => o => o.copy(fairness = v)),
   )
   val withInt: Map[String, Int => CegarOpts => CegarOpts] = Map(
     "--channel-size" -> (v => o => o.copy(channelSize = v)),
@@ -183,6 +194,10 @@ def parseCegarArgs(raw: Seq[String]): Either[String, CegarOpts] =
   if opts.model.isEmpty then return Left(s"expected a model file\n$cegarUsage")
   if !Seq("spin", "tla").contains(opts.target) then
     return Left(s"expected --target spin|tla, got '${opts.target}'")
+  if !Seq("weak", "strong", "none").contains(opts.fairness) then
+    return Left(s"invalid --fairness '${opts.fairness}' (weak|strong|none)\n$cegarUsage")
+  if opts.target == "spin" && opts.fairness == "strong" then
+    return Left("strong fairness is not supported by the SPIN target (weak or none)\n" + cegarUsage)
   Right(opts)
 
 /** Runs a subprocess, capturing combined stdout+stderr and the exit code. */
@@ -317,7 +332,8 @@ def cegar(args: Seq[String]): Unit =
     Files.createDirectories(itdir)
     val concreteModel = itdir.resolve(s"abstract.$ext")
     parse(concreteTvir.toString, concreteModel.toString, opts.target,
-          itdir.resolve("abstract.tvir").toString, debug = false, opts.channelSize)
+          itdir.resolve("abstract.tvir").toString, debug = false, opts.channelSize,
+          fairness = opts.fairness)
     println(s"\n[cegar] iteration $it: verifying the concrete model")
     val traceJson = itdir.resolve("trace.json")
     Files.deleteIfExists(traceJson)
@@ -325,7 +341,8 @@ def cegar(args: Seq[String]): Unit =
       "python3", "verifier.py", opts.target, concreteModel.toString,
       sourceFile.toString, workdir.resolve("concrete.map.json").toString,
       opts.traceSize.toString,
-      "--trace-json", traceJson.toString, "--channel-size", opts.channelSize.toString))
+      "--trace-json", traceJson.toString, "--channel-size", opts.channelSize.toString,
+      "--fairness", opts.fairness))
     println(vout)
     verifierStatus(vout, traceJson) match
       case "error" =>
@@ -350,7 +367,8 @@ def cegar(args: Seq[String]): Unit =
     val abstractModel = itdir.resolve(s"abstract.$ext")
     parse(concreteTvir.toString, abstractModel.toString, opts.target,
           itdir.resolve("abstract.tvir").toString, debug = false,
-          opts.channelSize, abstractionFile = abstractionJson.toString)
+          opts.channelSize, abstractionFile = abstractionJson.toString,
+          fairness = opts.fairness)
     val absReport = itdir.resolve(s"abstract.$ext.abs.json")
     val applied: List[AppliedDecision] =
       Json.parse(Files.readString(absReport)).field("applied") match
@@ -373,7 +391,8 @@ def cegar(args: Seq[String]): Unit =
       "python3", "verifier.py", opts.target, abstractModel.toString,
       sourceFile.toString, workdir.resolve("concrete.map.json").toString,
       opts.traceSize.toString,
-      "--trace-json", traceJson.toString, "--channel-size", opts.channelSize.toString))
+      "--trace-json", traceJson.toString, "--channel-size", opts.channelSize.toString,
+      "--fairness", opts.fairness))
     println(vout)
     verifierStatus(vout, traceJson) match
       case "error" =>
@@ -428,11 +447,14 @@ def main(args: String*): Unit =
     cegar(args.tail)
   else
     args match
+      case Seq(input, output, target, channelSizeLimit, dumpIrPath, abstractionFile, fairness) =>
+        parse(input, output, target, dumpIrPath, debug = false, channelSizeLimit.toInt, abstractionFile, fairness)
+        System.exit(0)
       case Seq(input, output, target, channelSizeLimit, dumpIrPath, abstractionFile) =>
         parse(input, output, target, dumpIrPath, debug = false, channelSizeLimit.toInt, abstractionFile)
         System.exit(0)
       case _ =>
         System.err.println(
-          "usage (direct):  runMain main <input> <output> <tla|spin|curtis|ir> <channel-size> <dump-ir|-> <abstraction|->\n" ++
-          "usage (--cegar): runMain main --cegar <input> <tla|spin> [--workdir DIR] [--iterations N] [--kinds a,b]")
+          "usage (direct):  runMain main <input> <output> <tla|spin|curtis|ir> <channel-size> <dump-ir|-> <abstraction|-> [weak|strong|none]\n" ++
+          "usage (--cegar): runMain main --cegar <input> <tla|spin> [--workdir DIR] [--iterations N] [--kinds a,b] [--fairness weak|strong|none]")
         System.exit(2)

@@ -21,6 +21,10 @@ trait TargetTranslator:
   var channelSizeLimit: Int = 20
   def setChannelSizeLimit(newLimit: Int): Unit = channelSizeLimit = newLimit
 
+  // Fairness assumed for verification: "weak" (default) | "strong" | "none"
+  var fairness: String = "weak"
+  def setFairness(f: String): Unit = fairness = f
+
   private val sourceMapper: SourceMapper = SourceMapper()
   def getMapper: SourceMapper = sourceMapper
 

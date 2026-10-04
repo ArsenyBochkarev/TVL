@@ -20,6 +20,8 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "  --trace-json=...      (Optional) Dump the counterexample in the canonical tvl-trace/1"
   echo "                        JSON format (for trace validation / CEGAR)."
   echo "  --no-truncate         (Optional) Do not cut the rendered counterexample at --trace-size."
+  echo "  --fairness=...        (Optional) Fairness for verification: 'weak' (default), 'strong',"
+  echo "                        or 'none'. SPIN supports 'weak' and 'none' only."
   echo "  --workdir=DIR         (--cegar only) Artifacts directory"
   echo "                        (default: <input dir>/cegar-out)."
   echo "  --iterations=N        (--cegar only) Refinement budget (default 20); on exhaustion the"
@@ -47,6 +49,7 @@ TARGET=$2
 
 CHANNEL_SIZE=20
 TRACE_SIZE=20
+FAIRNESS="weak"
 DUMP_IR="-"
 TRACE_JSON=""
 EXTRA_VERIFIER_ARGS=""
@@ -82,6 +85,13 @@ while [[ $# -gt 0 ]]; do
     --no-truncate)
       EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --no-truncate"
       ;;
+    --fairness=*)
+      FAIRNESS="${1#--fairness=}"
+      if [[ -z "$FAIRNESS" ]]; then
+        echo "Error: --fairness requires a value."
+        exit 1
+      fi
+      ;;
     --workdir=*|--iterations=*|--kinds=*)
       if [[ -z "${1#*=}" ]]; then
         echo "Error: ${1%%=*} requires a value."
@@ -102,10 +112,19 @@ if [[ "$CEGAR" == "0" && -n "$CEGAR_ARGS" ]]; then
   exit 1
 fi
 
+if [[ "$FAIRNESS" != "weak" && "$FAIRNESS" != "strong" && "$FAIRNESS" != "none" ]]; then
+  echo "Error: invalid --fairness '$FAIRNESS' (expected weak, strong or none)."
+  exit 1
+fi
+if [[ "$TARGET" == "spin" && "$FAIRNESS" == "strong" ]]; then
+  echo "Error: strong fairness is not supported by the SPIN target (weak or none only)."
+  exit 1
+fi
+
 export SBT_OPTS="--enable-native-access=ALL-UNNAMED --add-opens=java.base/java.lang=ALL-UNNAMED -XX:+IgnoreUnrecognizedVMOptions -XX:-PrintWarnings --sun-misc-unsafe-memory-access=allow"
 
 if [[ "$CEGAR" == "1" ]]; then
-  exec sbt -error "runMain main --cegar $INPUT $TARGET --channel-size=$CHANNEL_SIZE --trace-size=$TRACE_SIZE$CEGAR_ARGS"
+  exec sbt -error "runMain main --cegar $INPUT $TARGET --channel-size=$CHANNEL_SIZE --trace-size=$TRACE_SIZE --fairness=$FAIRNESS$CEGAR_ARGS"
 fi
 
 # Construct output file name
@@ -121,7 +140,7 @@ BASE=$(basename "$INPUT" .tvl)
 BASE=${BASE%.tvir}
 OUTPUT="$DIR/${BASE}.${EXT}"
 
-sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE $DUMP_IR -"
+sbt -error "runMain main $INPUT $OUTPUT $TARGET $CHANNEL_SIZE $DUMP_IR - $FAIRNESS"
 if [ $? -eq 1 ]; then
   echo "Translation failed."
   exit 1
@@ -141,10 +160,11 @@ SOURCE_FILE="$INPUT"
 if [[ "$INPUT" == *.tvir ]]; then
   SOURCE_FILE="${INPUT%.tvir}.tvl"
 fi
-EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --channel-size $CHANNEL_SIZE"
+EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --channel-size $CHANNEL_SIZE --fairness $FAIRNESS"
 if [[ -n "$TRACE_JSON" ]]; then
   EXTRA_VERIFIER_ARGS="$EXTRA_VERIFIER_ARGS --trace-json $TRACE_JSON"
 fi
 # The channel size limit is consumed by the curtis checker CLI (--channel-size);
-# the tla/spin codegen already embeds it, and verifier.py ignores the extra flag there
+# the tla/spin codegen already embeds it, and verifier.py ignores the extra flag there.
+# Fairness likewise: curtis/spin read the flag, tla has it baked into the model
 python3 verifier.py $TARGET $OUTPUT $SOURCE_FILE $MAP_PATH $TRACE_SIZE $EXTRA_VERIFIER_ARGS

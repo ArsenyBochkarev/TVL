@@ -102,9 +102,16 @@ class PlusCal extends TargetTranslator {
     sb.toString()
   }
 
+  // Process-level fairness: `fair process` (weak, the default), `fair+ process` (strong) or a plain `process` (no fairness)
+  private def processDecl(name: String): String =
+    fairness match
+      case "strong" => s"fair+ process $name = \"$name\""
+      case "none"   => s"process $name = \"$name\""
+      case _        => s"fair process $name = \"$name\""
+
   private def translateActor(name: String, instructions: mutable.Map[Int, IRInstruction]): String = {
     val sb = new StringBuilder()
-    sb.append(s"fair process $name = \"$name\"\n")
+    sb.append(processDecl(name) + "\n")
 
     sb.append("variables\n")
     // Declare finishing variable for current actor
