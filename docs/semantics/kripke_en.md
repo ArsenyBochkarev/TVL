@@ -1,134 +1,150 @@
-Message -- a named constant `Message`. A dictionary (map) of message queue dictionaries to an actor -- `Q: map[String, map[String, Message]]`. Keys are actor names.
+Message -- a named constant `Message`. The global state is a dictionary (map) of message queue dictionaries to an actor: `Q: map[String, map[String, List[Message]]]`. Keys are actor names.
 
-*Note*:
-- `;` -- sequential execution
-- `-->` -- logical entailment
-- `->` -- edge designation
-- `nil` -- absence of action
-- `MAX_QUEUE_SIZE` -- limit on channel size
-- Instructions introducing a scoped construct (`repeat`, `repeatN`, `parallel`) possess an internal parameter of the initial state. Implementation with a stack inside the actor tuple does not work, since it is impossible to distinguish the start of a loop from its normal execution.
+*Notation*:
+- *`;` -- sequential execution*
+- *`-->` -- logical entailment*
+- *`->` -- edge designation*
+- *`:=` -- state update*
+- *`nil` -- empty program. In the `effect` field, it denotes the identity function `Q := Q`*
+- *`MAX_QUEUE_SIZE` -- limit on channel size*
+- *The instructions `repeat`, `repeatN`, and `parallel` retain internal state: the original loop body and the residual of its current iteration, its counter, or the residual parallel branches.*
+- *Queue: `head :: tail`, where `head` is the first element and `tail` is the remainder. Empty queue: `[]`. The notation `q <- q :: M` denotes appending message `M` to the tail of queue `q` and replacing the original queue with the updated one. The notation `|q|` denotes the length of queue `q`.*
 
 Each actor is a tuple `(S, S0, L, T, F)`, where:
 - `S` -- the set of possible states of the actor
-  - State `s` of actor `A` is the current instruction in the program that `A` must execute
+  - State `s` of actor `A` is the entire residual program, including the continuation, saved loop bodies and counters, and residual parallel branches
 - `S0` -- the set of initial states of the actor
-- `L` -- labeling function. Associates a state with actor properties:
-  - `stepInsideScope(inst, s)` -- returns all edges that exist for `s` inside the current scoped construct: `repeat`, `repeatN`, or `parallel`
+- `L` -- labeling function. Associates a state with actor properties
 - `T` -- the set of possible transitions. A transition is a tuple `(s, cond, effect, n)`, where
   - `s` -- the current state of the actor
   - `cond` -- the transition condition
   - `effect` -- a function modifying the global state `Q`
   - `n` -- the next state of the actor ("∃ an edge from `s` to `n`")
+  - `stepInsideScope(inst, s)` is the set of local edges `(s, g, e, s')` for residual `s` inside `repeat`, `repeatN`, or `parallel`. One edge is selected, and its guard `g` and effect `e` are inherited by the outer edge unchanged.
+  - Guards are evaluated on the current `Q`. The effect is applied atomically with the transition. A disabled instruction and `nil` have no local waiting edges.
   - Transition variants:
     - Send:
       - `s` = `send M to B; s'`
-      - `cond` = `(Q = q_all U Q[A][B]) && (length(Q[A][B]) < MAX_QUEUE_SIZE)`
-      - `effect` = `Q := q_all U {Q[A][B] :: M}` (added message `M` to the end)
+      - `cond` = `Q == Q_other ∪ Q[B][A]   |Q[B][A]| < MAX_QUEUE_SIZE   Q[B][A] == Q_b_a`
+      - `effect` = `Q := Q_other ∪ Q[B][A](Q_b_a <- Q_b_a :: M)` (added message `M` to the end)
       - `n` = `s'`
     - Receive:
-      - Two variants, depending on the state of the message queue to `A` from `B`
       - `s` = `receive M from B; s'`
-        - `cond` = `Q = q_all U {M :: Q[A][B]}` (message `M` at the head of the queue to `A` from `B`)
+        - `cond` = `Q == Q_other ∪ Q[A][B]   Q[A][B] == M :: Q_a_b` (message `M` at the head of the queue to `A` from `B`)
           - `n` = `s'`
-          - `effect` = `Q := q_all U Q[A][B]`
-        - `cond` = `Q = q_all U {K :: Q[A][B]}`, where `K` != `M` (message `M` is not at the head of the queue to `A` from `B`)
-          - `n` = `s`
-          - `effect` = `nil`
+          - `effect` = `Q := Q_other ∪ Q[A][B](M :: Q_a_b <- Q_a_b)`
+      - An empty queue or a different head gives no transition. Within `parallel`, this blocks only the current branch if another branch can step.
     - Receive alts:
-      - Four variants, depending on the message queue to `A` and the presence of `otherwise`:
+      - Branches are indexed by `i = 1..N`: `(M_i, B_i, s_i)`.
+      - Let `E(A,Q) = {i | ∃q: Q[A][B_i] == M_i :: q}` be the set of indices of enabled branches of this instruction.
       - Without `otherwise`:
-        - `s` = `receive alts { M_0_0 from B_0 => { s_0_0 } ... M_i_0 from B_0 => { s_i_0 } ... M_I_0 from B_0 => { s_I_0 } ... M_0_b from B_b => { s_0_b } ... M_j_b from B_b => { s_j_b } ... M_J_b from B_b => { s_J_b } ... M_0_N from B_N => { s_0_N } ... M_k_N from B_N => { s_k_N } ... M_K_N from B_N => { s_K_N } }`
-        - Received message:
-          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`
-          - `effect` = `Q := q_all U Q[A][B_m]`
-          - `n` = `P_m`, where `m=0..M`, where `M` is the total number of branches
-        - Did not receive message:
-          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`, where `M` != any message from `receive alts`
-          - `effect` = `nil`
-          - `n` = `s` (returned to original state, waiting)
+        - `s` = `receive alts { M_1 from B_1 => { s_1 } ... M_N from B_N => { s_N } }; P`
+        - Received a message:
+          - `cond` = `i ∈ E(A,Q)   Q == Q_other ∪ Q[A][B_i]   Q[A][B_i] == M_i :: q`
+          - `effect` = `Q := Q_other ∪ Q[A][B_i](M_i :: q <- q)`
+          - `n` = `s_i; P`
+        - Did not receive a message: if `E(A,Q) = ∅`, there is no transition.
       - With `otherwise`:
-        - `s` = `receive alts { M_0_0 from B_0 => { s_0_0 } ... M_i_0 from B_0 => { s_i_0 } ... M_I_0 from B_0 => { s_I_0 } ... M_0_b from B_b => { s_0_b } ... M_j_b from B_b => { s_j_b } ... M_J_b from B_b => { s_J_b } ... M_0_N from B_N => { s_0_N } ... M_k_N from B_N => { s_k_N } ... M_K_N from B_N => { s_K_N } otherwise => { s_other } }`
-        - Received message (similar to previous case):
-          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`
-          - `effect` = `Q := q_all U Q[A][B_m]`
-          - `n` = `P_m`, where `m=0..M`, where `M` is the total number of branches
-        - Did not receive message:
-          - `cond` = `Q = q_all U {M :: Q[A][B_m]}`, where `M` != any message from `receive alts`
+        - `s` = `receive alts { M_1 from B_1 => { s_1 } ... M_N from B_N => { s_N } otherwise => { s_other } }; P`
+        - Received a message (similar to the previous case):
+          - `cond` = `i ∈ E(A,Q)   Q == Q_other ∪ Q[A][B_i]   Q[A][B_i] == M_i :: q`
+          - `effect` = `Q := Q_other ∪ Q[A][B_i](M_i :: q <- q)`
+          - `n` = `s_i; P`
+        - None of the available messages was received:
+          - `cond` = `E(A,Q) = ∅`
           - `effect` = `nil`
-          - `n` = `s_other` (moved to the state from the `otherwise` branch)
+          - `n` = `s_other; P` (moved to the state from the `otherwise` branch with its continuation)
+      - Any enabled branch is chosen nondeterministically, without source-order or sender priority, including branches with identical sender-message pairs. Testing the current queue heads, selecting a branch, and removing the selected message form one atomic step.
     - Choose:
-      - ∃ `N` transitions, `∀i=0..N`:
-        - `s` = `choose { s_1 } or ... or { s_N }`
+      - ∃ `N` transitions, `∀i=1..N`:
+        - `s` = `choose { s_1 } or ... or { s_N }; P`
         - `cond` = `true`
         - `effect` = `nil`
-        - `n` = `s_i`
+        - `n` = `s_i; P`
     - Repeat:
       - Three variants:
-        - Initially save the loop body, as an internal parameter for the `repeat` instruction
+        - Initially save the loop body as an internal parameter of the `repeat` instruction and also take a computation step
           - `s` = `repeat { s_1 }; P`
-          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
+          - For each edge `(s_1, g, e, s_1') ∈ stepInsideScope(repeat, s_1)`:
+            - `cond` = `g(Q)`
+            - `effect` = `e`
+            - `n` = `repeat [s_1] { s_1' }; P`
+        - Similar, but for a loop with an already saved parameter:
+          - `s` = `repeat [s_body] { s_i }; P`
+          - For each edge `(s_i, g, e, s_i') ∈ stepInsideScope(repeat, s_i)`:
+            - `cond` = `g(Q)`
+            - `effect` = `e`
+            - `n` = `repeat [s_body] { s_i' }; P`
+        - When the parameter has been saved and the current loop iteration has completed, restart the loop:
+          - `s` = `repeat [s_body] { nil }; P` (no actions left in the current loop iteration)
+          - `cond` = `true`
           - `effect` = `nil`
-          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
-        - Similar, but with a saved parameter:
-          - `s` = `repeat [s_1] { s_1; s_1' }; P`
-          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
-          - `effect` = `nil`
-          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
-        - When we have a saved parameter, and we have finished the current loop iteration, restart it:
-          - `s` = `repeat { nil }; P` (no actions left in the current loop iteration)
-          - `cond` = `stepInsideScope(repeat, s_1) = s_1'`
-          - `effect` = `nil`
-          - `n` = `repeat [s_1] { s_1; s_1' }; P` (use the parameter and set the loop body again)
+          - `n` = `repeat [s_body] { s_body }; P` (use the parameter and set the loop body again)
     - Repeat N:
-      - Three variants, similar to the option above, but with the possibility of exiting when the counter finishes
-      - Not just syntactic sugar, since we want to support `break` for it
-        - Initially save the loop body, as an internal parameter for the `repeat` instruction
-          - `s` = `repeat N { s_1; s_1' }; P`
-          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
-          - `effect` = `nil`
-          - `n` = `repeat [s_1] N-1 { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
-        - Similar, but with a saved parameter:
-          - `s` = `repeat [s_1] N { s_1; s_1' }; P`
-          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
-          - `effect` = `nil`
-          - `n` = `repeat [s_1] { s_1' }; P` (perform a computation step in the body, and also save the loop body as a parameter in `repeat`)
-        - When we have a saved parameter, and we have finished the current loop iteration, restart it:
-          - `s` = `repeat { nil }; P` (no actions left in the current loop iteration)
-          - `cond` = `stepInsideScope(repeatN, s_1) = s_1'`
-          - `effect` = `nil`
-          - `n` = `repeat [s_1] { s_1; s_1' }; P` (use the parameter and set the loop body again)
-    - Break:
-      - Four variants, depending on the loop type:
-      - Without counter:
+      - Five variants, analogous to the above, but allowing an exit when the counter is exhausted
+      - Not just syntactic sugar, since it supports `break`
+      - The source count is an integer `N ≥ 0`; in the internal form, `N > 0` counts remaining iterations including the current one. Body steps do not decrease the counter.
+        - Initially save the loop body as an internal parameter of the `repeat` instruction and also take a computation step
           - `s` = `repeat { s_1 }; P`
-          - `cond` = `stepInsideScope(repeatN, s_1) = break`
+          - For each edge `(s_1, g, e, s_1') ∈ stepInsideScope(repeat, s_1)`:
+            - `cond` = `g(Q)`
+            - `effect` = `e`
+            - `n` = `repeat [s_1] { s_1' }; P`
+        - Similar, but with a saved parameter:
+          - `s` = `repeat [s_body] N { s_i }; P`
+          - For each `(s_i, g, e, s_i') ∈ stepInsideScope(repeatN, s_i)` when `N > 0`:
+            - `cond` = `g(Q)`
+            - `effect` = `e`
+            - `n` = `repeat [s_body] N { s_i' }; P`
+        - When the parameter has been saved and the current loop iteration has completed, restart the loop and decrease the counter:
+          - `s` = `repeat [s_body] N { nil }; P`
+          - `cond` = `N > 1`
+          - `effect` = `nil`
+          - `n` = `repeat [s_body] (N-1) { s_body }; P`
+        - After the last iteration:
+          - `s` = `repeat [s_body] 1 { nil }; P`
+          - `cond` = `true`
           - `effect` = `nil`
           - `n` = `P`
-      - Without counter, memorized body:
-          - `s` = `repeat [s_body] { s_1 }; P`
-          - `cond` = `stepInsideScope(repeatN, s_1) = break`
+        - Zero source count (the body is not executed):
+          - `s` = `repeat 0 { s_1 }; P`
+          - `cond` = `true`
           - `effect` = `nil`
           - `n` = `P`
-      - With counter:
-        - `s` = `repeat N { s_1 }; P`
-        - `cond` = `stepInsideScope(repeatN, s_1) = break`
-        - `effect` = `nil`
-        - `n` = `P`
-      - With counter, memorized body:
-        - `s` = `repeat [s_body] N { s_1 }; P`
-        - `cond` = `stepInsideScope(repeatN, s_1) = break`
-        - `effect` = `nil`
-        - `n` = `P`
+    - Break:
+      - Two variants for exiting loops after their initialization:
+        - Without a counter, with a saved body:
+            - `s` = `repeat [s_body] { break; s_1 }; P`
+            - `cond` = `true`
+            - `effect` = `nil`
+            - `n` = `P`
+        - With a counter and a saved body:
+          - `s` = `repeat [s_body] N { break; s_1 }; P`
+          - `cond` = `N > 0`
+          - `effect` = `nil`
+          - `n` = `P`
+      - `break` has no standalone edge and is invalid outside the scopes of `repeat`, `repeat N`, or `parallel`. A source loop initializes first. `repeat 0` skips its body, including `break`.
     - Parallel:
-      - `parallel { s_1 } and ... and { s_i } and ... and { s_N }; P`:
-      - `effect` = `nil`
-      - Two variants, depending on whether the execution of all `parallel` branches has finished, or not:
-      - Can proceed further:
-        - `cond` = `stepInsideScope(parallel, s_i) = s_i' && s_i' != nil`
-        - ∃ `N+1` transitions, `∀i=0..N`:
-          - `n` = `parallel { s_1 } and ... and { s_i' } and ... and { s_N }; P` (proceed along the current branch)
-          - `n` = `parallel { s_1 } and ... and { s_j } and ... and { s_N }; P`, where `j=1..i-1,i+1..N` (interleaving)
-      - Execution of all `parallel` branches has completed or we encountered a `break`:
-        - `cond` = `(stepInsideScope(parallel, s_i) = s_i' && s_i' == nil) || (stepInsideScope(parallel, s_i) = s_i' && s_i' == break)`
+      - `s` = `parallel { s_1 } and ... and { s_i } and ... and { s_N }; P`
+      - Execution can proceed further:
+        - For any `i = 1..N` and each `(s_i, g, e, s_i') ∈ stepInsideScope(parallel, s_i)`:
+          - `cond` = `g(Q)`
+          - `effect` = `e`
+          - `n` = `parallel { s_1 } and ... and { s_i' } and ... and { s_N }; P` (advance along the current branch)
+        - One branch advances; the others remain unchanged. Blocked and completed (`nil`) branches do not prevent another branch from stepping.
+      - Execution of all `parallel` branches has completed:
+        - `cond` = `∀i=1..N. s_i = nil`
+        - `effect` = `nil`
         - `n` = `P`
-- `F` -- the set of final states
+      - Encountered `break` in one of the branches:
+        - `cond` = `∃i=1..N, R. s_i = break; R`
+        - `effect` = `nil`
+        - `n` = `P`
+        - All branches are cancelled. Exiting has no priority over another branch's step. A loop inside `parallel` handles its own `break` first, without exiting the enclosing parallel execution.
+      - Nested `parallel` is forbidden.
+    - Skip:
+      - `s` = `skip; P`
+      - `cond` = `true`
+      - `effect` = `nil`
+      - `n` = `P`
+- `F` -- the set of final states: `{s ∈ S | s = nil}`
