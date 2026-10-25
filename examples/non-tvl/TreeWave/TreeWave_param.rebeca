@@ -1,0 +1,54 @@
+reactiveclass Leaf (20) {
+    knownrebecs {
+        Controller controller;
+    }
+
+    Leaf() {
+        self.start();
+    }
+
+    msgsrv start() {
+        controller.tok();
+    }
+
+    msgsrv tok() {
+    }
+}
+
+reactiveclass Controller (20) {
+    knownrebecs {
+        Leaf a;
+        Leaf c;
+    }
+    statevars {
+        int received;
+        boolean aFirst;
+    }
+
+    Controller() {
+        received = 0;
+        aFirst = false;
+    }
+
+    msgsrv tok() {
+        if (received == 0) {
+            aFirst = sender == a;
+        }
+        received++;
+        if (received == 2) {
+            if (aFirst) {
+                a.tok();
+                c.tok();
+            } else {
+                c.tok();
+                a.tok();
+            }
+        }
+    }
+}
+
+main {
+    Leaf a(b):();
+    Leaf c(b):();
+    Controller b(a, c):();
+}

@@ -1,0 +1,193 @@
+reactiveclass Client1 (20) {
+    knownrebecs {
+        Gateway gateway;
+    }
+    statevars {
+        boolean ready;
+        boolean finished;
+    }
+
+    Client1() {
+        self.start();
+    }
+
+    msgsrv start() {
+        ready = false;
+        finished = false;
+        gateway.pay(1);
+    }
+
+    msgsrv ack() {
+        ready = true;
+    }
+
+    msgsrv lost() {
+        if (ready && !finished) {
+            gateway.pay(1);
+        }
+    }
+
+    msgsrv processed() {
+        if (ready && !finished) {
+            gateway.thanks();
+            finished = true;
+        }
+    }
+}
+
+reactiveclass Client2 (20) {
+    knownrebecs {
+        Gateway gateway;
+    }
+    statevars {
+        boolean ready;
+        boolean finished;
+    }
+
+    Client2() {
+        self.start();
+    }
+
+    msgsrv start() {
+        ready = false;
+        finished = false;
+        gateway.pay(2);
+    }
+
+    msgsrv ack() {
+        ready = true;
+    }
+
+    msgsrv lost() {
+        if (ready && !finished) {
+            gateway.pay(2);
+        }
+    }
+
+    msgsrv processed() {
+        if (ready && !finished) {
+            gateway.thanks();
+            finished = true;
+        }
+    }
+}
+
+reactiveclass Gateway (20) {
+    knownrebecs {
+        Broker broker;
+    }
+    statevars {
+        boolean accepted;
+        int acknowledgements;
+    }
+
+    Gateway() {
+        accepted = false;
+        acknowledgements = 0;
+    }
+
+    msgsrv pay(int client) {
+        if (!accepted) {
+            accepted = true;
+            broker.pay(client);
+        }
+    }
+
+    msgsrv thanks() {
+        if (accepted && acknowledgements < 2) {
+            acknowledgements++;
+            if (acknowledgements == 2) {
+                broker.thanks();
+            }
+        }
+    }
+}
+
+reactiveclass Broker (20) {
+    knownrebecs {
+        Client1 first;
+        Client2 second;
+        PayProcessor processor;
+    }
+    statevars {
+        boolean accepted;
+    }
+
+    Broker() {
+        accepted = false;
+    }
+
+    msgsrv pay(int client) {
+        if (!accepted) {
+            accepted = true;
+            processor.pay(client);
+            if (client == 1) {
+                first.ack();
+            } else {
+                second.ack();
+            }
+        }
+    }
+
+    msgsrv lost(int client) {
+        if (client == 1) {
+            first.lost();
+        } else {
+            second.lost();
+        }
+    }
+
+    msgsrv processed(int client) {
+        if (client == 1) {
+            first.processed();
+        } else {
+            second.processed();
+        }
+    }
+
+    msgsrv tryAgain(int client) {
+        processor.pay(client);
+    }
+
+    msgsrv thanks() {
+        processor.thanks();
+    }
+}
+
+reactiveclass PayProcessor (20) {
+    knownrebecs {
+        Broker broker;
+    }
+    statevars {
+        boolean finished;
+    }
+
+    PayProcessor() {
+        finished = false;
+    }
+
+    msgsrv pay(int client) {
+        if (!finished) {
+            int outcome = ?(0, 1, 2);
+            if (outcome == 0) {
+                broker.lost(client);
+            } else if (outcome == 1) {
+                broker.tryAgain(client);
+            } else {
+                broker.processed(client);
+            }
+        }
+    }
+
+    msgsrv thanks() {
+        finished = true;
+    }
+}
+
+main {
+    Client1 client1(gateway):();
+    Client2 client2(gateway):();
+    Gateway gateway(broker):();
+    Broker broker(client1, client2, processor):();
+    PayProcessor processor(broker):();
+}

@@ -1,0 +1,112 @@
+reactiveclass Node (20) {
+    knownrebecs {
+        Node first;
+        Node second;
+        Node third;
+    }
+    statevars {
+        int id;
+        int degree;
+        int[3] neighbors;
+        int[3] order;
+        boolean[4] pending;
+        int parent;
+        int length;
+        int position;
+        boolean started;
+        boolean finished;
+    }
+
+    Node(int nodeId, int count, int n1, int n2, int n3, boolean initiator) {
+        self.start(nodeId, count, n1, n2, n3, initiator);
+    }
+
+    msgsrv start(int nodeId, int count, int n1, int n2, int n3, boolean initiator) {
+        id = nodeId;
+        degree = count;
+        neighbors[0] = n1;
+        neighbors[1] = n2;
+        neighbors[2] = n3;
+        parent = -1;
+        length = 0;
+        position = 0;
+        started = false;
+        finished = false;
+        for (int i = 0; i < 4; i++) {
+            pending[i] = false;
+        }
+        if (initiator) {
+            begin(-1, ?(0, 1, 2), ?(true, false));
+        }
+    }
+
+    msgsrv token(int source) {
+        if (!finished) {
+            if (!started) {
+                begin(source, ?(0, 1, 2), ?(true, false));
+            } else {
+                pending[source] = true;
+                advance();
+            }
+        }
+    }
+
+    void begin(int from, int chosen, boolean flip) {
+        started = true;
+        parent = from;
+        length = 0;
+        for (int i = 0; i < degree; i++) {
+            if (neighbors[i] != parent) {
+                order[length] = neighbors[i];
+                length++;
+            }
+        }
+        if (length == 3) {
+            int swap = order[0];
+            order[0] = order[chosen];
+            order[chosen] = swap;
+            if (flip) {
+                swap = order[1];
+                order[1] = order[2];
+                order[2] = swap;
+            }
+        } else if (length == 2 && flip) {
+            int swap = order[0];
+            order[0] = order[1];
+            order[1] = swap;
+        }
+        position = 0;
+        sendToken(order[position]);
+    }
+
+    void advance() {
+        while (!finished && pending[order[position]]) {
+            pending[order[position]] = false;
+            position++;
+            if (position == length) {
+                finished = true;
+                if (parent >= 0) {
+                    sendToken(parent);
+                }
+            } else {
+                sendToken(order[position]);
+            }
+        }
+    }
+    void sendToken(int target) {
+        if (target == neighbors[0]) {
+            first.token(id);
+        } else if (target == neighbors[1]) {
+            second.token(id);
+        } else {
+            third.token(id);
+        }
+    }
+}
+
+main {
+    Node a(b, c, d):(0, 3, 1, 2, 3, true);
+    Node b(a, c, b):(1, 2, 0, 2, 1, false);
+    Node c(a, b, d):(2, 3, 0, 1, 3, false);
+    Node d(a, c, d):(3, 2, 0, 2, 3, false);
+}

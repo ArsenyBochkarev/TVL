@@ -1,0 +1,274 @@
+reactiveclass R1 (20) {
+    knownrebecs {
+        R2 next;
+    }
+    statevars {
+        int phase;
+        int first;
+    }
+
+    R1() {
+        self.start();
+    }
+
+    msgsrv start() {
+        phase = 0;
+        first = 0;
+        next.one(1);
+    }
+
+    // 0: candidate; 1: await second; 2: await maximum; 3: relay; 4: done.
+    msgsrv one(int value) {
+        if (phase == 3) {
+            next.one(value);
+        } else if (phase == 2 && value == 4) {
+            next.win(4);
+            phase = 3;
+        } else if (phase == 0) {
+            if (value == 1) {
+                next.win(value);
+                phase = 3;
+            } else {
+                first = value;
+                next.two(value);
+                phase = 1;
+            }
+        }
+    }
+
+    msgsrv two(int value) {
+        if (phase == 3) {
+            next.two(value);
+        } else if (phase == 1) {
+            if (first > 1 && value < first) {
+                next.one(first);
+                if (first == 4) {
+                    phase = 2;
+                } else {
+                    phase = 0;
+                }
+            } else {
+                phase = 3;
+            }
+        }
+    }
+
+    msgsrv win(int value) {
+        if (phase == 0 || phase == 3) {
+            next.win(value);
+            if (phase == 3) {
+                phase = 4;
+            } else {
+                phase = 3;
+            }
+        }
+    }
+}
+
+reactiveclass R2 (20) {
+    knownrebecs {
+        R3 next;
+    }
+    statevars {
+        int phase;
+        int first;
+    }
+
+    R2() {
+        self.start();
+    }
+
+    msgsrv start() {
+        phase = 0;
+        first = 0;
+        next.one(2);
+    }
+
+    // 0: candidate; 1: await second; 2: await maximum; 3: relay; 4: done.
+    msgsrv one(int value) {
+        if (phase == 3) {
+            next.one(value);
+        } else if (phase == 2 && value == 4) {
+            next.win(4);
+            phase = 3;
+        } else if (phase == 0) {
+            if (value == 2) {
+                next.win(value);
+                phase = 3;
+            } else {
+                first = value;
+                next.two(value);
+                phase = 1;
+            }
+        }
+    }
+
+    msgsrv two(int value) {
+        if (phase == 3) {
+            next.two(value);
+        } else if (phase == 1) {
+            if (first > 2 && value < first) {
+                next.one(first);
+                if (first == 4) {
+                    phase = 2;
+                } else {
+                    phase = 0;
+                }
+            } else {
+                phase = 3;
+            }
+        }
+    }
+
+    msgsrv win(int value) {
+        if (phase == 0 || phase == 3) {
+            next.win(value);
+            if (phase == 3) {
+                phase = 4;
+            } else {
+                phase = 3;
+            }
+        }
+    }
+}
+
+reactiveclass R3 (20) {
+    knownrebecs {
+        R4 next;
+    }
+    statevars {
+        int phase;
+        int first;
+    }
+
+    R3() {
+        self.start();
+    }
+
+    msgsrv start() {
+        phase = 0;
+        first = 0;
+        next.one(3);
+    }
+
+    // 0: candidate; 1: await second; 2: await maximum; 3: relay; 4: done.
+    msgsrv one(int value) {
+        if (phase == 3) {
+            next.one(value);
+        } else if (phase == 2 && value == 4) {
+            next.win(4);
+            phase = 3;
+        } else if (phase == 0) {
+            if (value == 3) {
+                next.win(value);
+                phase = 3;
+            } else {
+                first = value;
+                next.two(value);
+                phase = 1;
+            }
+        }
+    }
+
+    msgsrv two(int value) {
+        if (phase == 3) {
+            next.two(value);
+        } else if (phase == 1) {
+            if (first > 3 && value < first) {
+                next.one(first);
+                if (first == 4) {
+                    phase = 2;
+                } else {
+                    phase = 0;
+                }
+            } else {
+                phase = 3;
+            }
+        }
+    }
+
+    msgsrv win(int value) {
+        if (phase == 0 || phase == 3) {
+            next.win(value);
+            if (phase == 3) {
+                phase = 4;
+            } else {
+                phase = 3;
+            }
+        }
+    }
+}
+
+reactiveclass R4 (20) {
+    knownrebecs {
+        R1 next;
+    }
+    statevars {
+        int phase;
+        int first;
+    }
+
+    R4() {
+        self.start();
+    }
+
+    msgsrv start() {
+        phase = 0;
+        first = 0;
+        next.one(4);
+    }
+
+    // 0: candidate; 1: await second; 2: await maximum; 3: relay; 4: done.
+    msgsrv one(int value) {
+        if (phase == 3) {
+            next.one(value);
+        } else if (phase == 2 && value == 4) {
+            next.win(4);
+            phase = 3;
+        } else if (phase == 0) {
+            if (value == 4) {
+                next.win(value);
+                phase = 3;
+            } else {
+                first = value;
+                next.two(value);
+                phase = 1;
+            }
+        }
+    }
+
+    msgsrv two(int value) {
+        if (phase == 3) {
+            next.two(value);
+        } else if (phase == 1) {
+            if (first > 4 && value < first) {
+                next.one(first);
+                if (first == 4) {
+                    phase = 2;
+                } else {
+                    phase = 0;
+                }
+            } else {
+                phase = 3;
+            }
+        }
+    }
+
+    msgsrv win(int value) {
+        if (phase == 0 || phase == 3) {
+            next.win(value);
+            if (phase == 3) {
+                phase = 4;
+            } else {
+                phase = 3;
+            }
+        }
+    }
+}
+
+main {
+    R1 r1(r2):();
+    R2 r2(r3):();
+    R3 r3(r4):();
+    R4 r4(r1):();
+}

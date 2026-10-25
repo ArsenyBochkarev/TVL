@@ -1,0 +1,182 @@
+reactiveclass R1 (20) {
+    knownrebecs {
+        R2 next;
+    }
+    statevars {
+        boolean active;
+        boolean elected;
+        boolean finished;
+    }
+
+    R1() {
+        self.start();
+    }
+
+    msgsrv start() {
+        active = ?(true, false);
+        elected = false;
+        finished = false;
+        if (active) {
+            next.candidate(1);
+        }
+    }
+
+    msgsrv candidate(int value) {
+        if (!finished && !elected) {
+            if (value == 1) {
+                elected = true;
+                next.stop();
+            } else if (!active || value > 1) {
+                next.candidate(value);
+            }
+        }
+    }
+
+    msgsrv stop() {
+        if (!finished) {
+            if (!elected) {
+                next.stop();
+            }
+            finished = true;
+        }
+    }
+}
+
+reactiveclass R2 (20) {
+    knownrebecs {
+        R3 next;
+    }
+    statevars {
+        boolean active;
+        boolean elected;
+        boolean finished;
+    }
+
+    R2() {
+        self.start();
+    }
+
+    msgsrv start() {
+        active = ?(true, false);
+        elected = false;
+        finished = false;
+        if (active) {
+            next.candidate(2);
+        }
+    }
+
+    msgsrv candidate(int value) {
+        if (!finished && !elected) {
+            if (value == 2) {
+                elected = true;
+                next.stop();
+            } else if (!active || value > 2) {
+                next.candidate(value);
+            }
+        }
+    }
+
+    msgsrv stop() {
+        if (!finished) {
+            if (!elected) {
+                next.stop();
+            }
+            finished = true;
+        }
+    }
+}
+
+reactiveclass R3 (20) {
+    knownrebecs {
+        R4 next;
+    }
+    statevars {
+        boolean active;
+        boolean elected;
+        boolean finished;
+    }
+
+    R3() {
+        self.start();
+    }
+
+    msgsrv start() {
+        active = ?(true, false);
+        elected = false;
+        finished = false;
+        if (active) {
+            next.candidate(3);
+        }
+    }
+
+    msgsrv candidate(int value) {
+        if (!finished && !elected) {
+            if (value == 3) {
+                elected = true;
+                next.stop();
+            } else if (!active || value > 3) {
+                next.candidate(value);
+            }
+        }
+    }
+
+    msgsrv stop() {
+        if (!finished) {
+            if (!elected) {
+                next.stop();
+            }
+            finished = true;
+        }
+    }
+}
+
+reactiveclass R4 (20) {
+    knownrebecs {
+        R1 next;
+    }
+    statevars {
+        boolean active;
+        boolean elected;
+        boolean finished;
+    }
+
+    R4() {
+        self.start();
+    }
+
+    msgsrv start() {
+        active = ?(true, false);
+        elected = false;
+        finished = false;
+        if (active) {
+            next.candidate(4);
+        }
+    }
+
+    msgsrv candidate(int value) {
+        if (!finished && !elected) {
+            if (value == 4) {
+                elected = true;
+                next.stop();
+            } else if (!active || value > 4) {
+                next.candidate(value);
+            }
+        }
+    }
+
+    msgsrv stop() {
+        if (!finished) {
+            if (!elected) {
+                next.stop();
+            }
+            finished = true;
+        }
+    }
+}
+
+main {
+    R1 r1(r2):();
+    R2 r2(r3):();
+    R3 r3(r4):();
+    R4 r4(r1):();
+}

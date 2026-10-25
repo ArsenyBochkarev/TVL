@@ -1,0 +1,48 @@
+reactiveclass UDev (20) {
+    knownrebecs {
+        Automount automount;
+    }
+
+    UDev() {
+        self.detect();
+    }
+
+    msgsrv detect() {
+        if (?(true, false)) {
+            automount.deviceAdded();
+        }
+        self.detect();
+    }
+}
+
+reactiveclass Automount (20) {
+    knownrebecs {
+        FileManager fileManager;
+    }
+
+    Automount() {
+
+    }
+
+    msgsrv deviceAdded() {
+        if (?(true, false)) {
+            fileManager.deviceMounted();
+        }
+    }
+}
+
+reactiveclass FileManager (20) {
+
+    FileManager() {
+
+    }
+
+    msgsrv deviceMounted() {
+    }
+}
+
+main {
+    UDev udev(automount):();
+    Automount automount(fileManager):();
+    FileManager fileManager():();
+}

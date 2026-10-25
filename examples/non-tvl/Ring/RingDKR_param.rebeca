@@ -1,0 +1,75 @@
+reactiveclass Node (20) {
+    knownrebecs {
+        Node next;
+    }
+    statevars {
+        int rank;
+        int phase;
+        int first;
+    }
+
+    Node(int nodeRank) {
+        self.start(nodeRank);
+    }
+
+    msgsrv start(int nodeRank) {
+        rank = nodeRank;
+        phase = 0;
+        first = 0;
+        next.one(rank);
+    }
+
+    // 0: candidate; 1: await second; 2: await maximum; 3: relay; 4: done.
+    msgsrv one(int value) {
+        if (phase == 3) {
+            next.one(value);
+        } else if (phase == 2 && value == 4) {
+            next.win(4);
+            phase = 3;
+        } else if (phase == 0) {
+            if (value == rank) {
+                next.win(value);
+                phase = 3;
+            } else {
+                first = value;
+                next.two(value);
+                phase = 1;
+            }
+        }
+    }
+
+    msgsrv two(int value) {
+        if (phase == 3) {
+            next.two(value);
+        } else if (phase == 1) {
+            if (first > rank && value < first) {
+                next.one(first);
+                if (first == 4) {
+                    phase = 2;
+                } else {
+                    phase = 0;
+                }
+            } else {
+                phase = 3;
+            }
+        }
+    }
+
+    msgsrv win(int value) {
+        if (phase == 0 || phase == 3) {
+            next.win(value);
+            if (phase == 3) {
+                phase = 4;
+            } else {
+                phase = 3;
+            }
+        }
+    }
+}
+
+main {
+    Node r1(r2):(1);
+    Node r2(r3):(2);
+    Node r3(r4):(3);
+    Node r4(r1):(4);
+}

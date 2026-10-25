@@ -1,0 +1,111 @@
+reactiveclass Initiator (20) {
+    knownrebecs {
+        Peer first;
+        Peer second;
+        Peer third;
+    }
+    statevars {
+        int echoes;
+        int target;
+        boolean finished;
+    }
+
+    Initiator() {
+        self.start();
+    }
+
+    msgsrv start() {
+        echoes = 0;
+        finished = false;
+        target = 2;
+        if (?(true, false)) {
+            first.init();
+            second.init();
+            third.init();
+            first.echo();
+            second.echo();
+            third.echo();
+            target = 4;
+        }
+    }
+
+    msgsrv echo() {
+        if (!finished) {
+            echoes++;
+            if (echoes >= target) {
+                finished = true;
+            }
+        }
+    }
+}
+
+reactiveclass Peer (20) {
+    knownrebecs {
+        Initiator first;
+        Peer second;
+        Peer third;
+    }
+    statevars {
+        boolean initMode;
+        boolean initialSeen;
+        boolean sentEcho;
+        boolean finished;
+        int echoes;
+        int signals;
+    }
+
+    Peer() {
+        self.start();
+    }
+
+    msgsrv start() {
+        initMode = ?(true, false);
+        initialSeen = false;
+        sentEcho = false;
+        finished = false;
+        echoes = 0;
+        signals = 0;
+    }
+
+    msgsrv init() {
+        if (!finished) {
+            initialSeen = true;
+            signals++;
+            advance();
+        }
+    }
+
+    msgsrv echo() {
+        if (!finished) {
+            echoes++;
+            signals++;
+            advance();
+        }
+    }
+
+    void advance() {
+        if (initMode) {
+            if (initialSeen && !sentEcho) {
+                first.echo();
+                second.echo();
+                third.echo();
+                sentEcho = true;
+            }
+            if (sentEcho && echoes >= 2) {
+                finished = true;
+            }
+        } else if (signals >= 2) {
+            first.echo();
+            second.echo();
+            third.echo();
+            finished = true;
+        }
+    }
+}
+
+main {
+    Initiator n1(n2, n3, n4):();
+    Peer n2(n1, n3, n4):();
+    Peer n3(n1, n2, n4):();
+    Peer n4(n1, n2, n3):();
+}

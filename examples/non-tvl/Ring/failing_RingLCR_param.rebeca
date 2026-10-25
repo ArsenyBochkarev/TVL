@@ -1,0 +1,52 @@
+reactiveclass Node (20) {
+    knownrebecs {
+        Node next;
+    }
+    statevars {
+        int rank;
+        boolean active;
+        boolean elected;
+        boolean finished;
+    }
+
+    Node(int nodeRank) {
+        self.start(nodeRank);
+    }
+
+    msgsrv start(int nodeRank) {
+        rank = nodeRank;
+        active = ?(true, false);
+        elected = false;
+        finished = false;
+        if (active) {
+            next.candidate(rank);
+        }
+    }
+
+    msgsrv candidate(int value) {
+        if (!finished && !elected && !(rank == 2 && value == 4)) {
+            if (value == rank) {
+                elected = true;
+                next.stop();
+            } else if (!active || value > rank) {
+                next.candidate(value);
+            }
+        }
+    }
+
+    msgsrv stop() {
+        if (!finished) {
+            if (!elected) {
+                next.stop();
+            }
+            finished = true;
+        }
+    }
+}
+
+main {
+    Node r1(r2):(1);
+    Node r2(r3):(2);
+    Node r3(r4):(3);
+    Node r4(r1):(4);
+}

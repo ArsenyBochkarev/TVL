@@ -1,0 +1,288 @@
+reactiveclass Initiator (20) {
+    knownrebecs {
+        N2 first;
+        N3 second;
+        N4 third;
+    }
+    statevars {
+        boolean echoMode;
+        boolean sentVote;
+        boolean finished;
+        int echoes;
+        int votes;
+    }
+
+    Initiator() {
+        self.start();
+    }
+
+    msgsrv start() {
+        echoMode = ?(true, false);
+        sentVote = false;
+        finished = false;
+        echoes = 0;
+        votes = 0;
+        first.init();
+        second.init();
+        third.init();
+    }
+
+    msgsrv echo() {
+        if (!finished && echoMode) {
+            echoes++;
+            advance();
+        }
+    }
+
+    msgsrv vote() {
+        if (!finished) {
+            if (echoMode) {
+                votes++;
+                advance();
+            } else if (votes == 0) {
+                votes = 1;
+            } else {
+                first.vote();
+                second.vote();
+                third.vote();
+            }
+        }
+    }
+
+    void advance() {
+        if (echoMode) {
+            if (echoes >= 2 && !sentVote) {
+                first.vote();
+                second.vote();
+                third.vote();
+                sentVote = true;
+            }
+            if (sentVote && votes >= 2) {
+                finished = true;
+            }
+        }
+    }
+}
+
+reactiveclass N2 (20) {
+    knownrebecs {
+        Initiator first;
+        N3 second;
+        N4 third;
+    }
+    statevars {
+        boolean initMode;
+        boolean initialSeen;
+        boolean sentVote;
+        boolean finished;
+        int echoes;
+        int votes;
+    }
+
+    N2() {
+        self.start();
+    }
+
+    msgsrv start() {
+        initMode = ?(true, false);
+        initialSeen = false;
+        sentVote = false;
+        finished = false;
+        echoes = 0;
+        votes = 0;
+    }
+
+    msgsrv init() {
+        if (initMode && !initialSeen && !finished) {
+            initialSeen = true;
+            first.echo();
+            second.echo();
+            third.echo();
+            advance();
+        }
+    }
+
+    msgsrv echo() {
+        if (!finished && initMode) {
+            echoes++;
+            advance();
+        }
+    }
+
+    msgsrv vote() {
+        if (!finished) {
+            votes++;
+            advance();
+        }
+    }
+
+    void advance() {
+        if (initMode) {
+            if (initialSeen && echoes >= 2 && !sentVote) {
+                first.vote();
+                second.vote();
+                third.vote();
+                sentVote = true;
+            }
+            if (sentVote && votes >= 2) {
+                finished = true;
+            }
+        } else if (votes >= 2) {
+            first.vote();
+            second.vote();
+            third.vote();
+            finished = true;
+        }
+    }
+}
+
+reactiveclass N3 (20) {
+    knownrebecs {
+        Initiator first;
+        N2 second;
+        N4 third;
+    }
+    statevars {
+        boolean initMode;
+        boolean initialSeen;
+        boolean sentVote;
+        boolean finished;
+        int echoes;
+        int votes;
+    }
+
+    N3() {
+        self.start();
+    }
+
+    msgsrv start() {
+        initMode = ?(true, false);
+        initialSeen = false;
+        sentVote = false;
+        finished = false;
+        echoes = 0;
+        votes = 0;
+    }
+
+    msgsrv init() {
+        if (initMode && !initialSeen && !finished) {
+            initialSeen = true;
+            first.echo();
+            second.echo();
+            third.echo();
+            advance();
+        }
+    }
+
+    msgsrv echo() {
+        if (!finished && initMode) {
+            echoes++;
+            advance();
+        }
+    }
+
+    msgsrv vote() {
+        if (!finished) {
+            votes++;
+            advance();
+        }
+    }
+
+    void advance() {
+        if (initMode) {
+            if (initialSeen && echoes >= 2 && !sentVote) {
+                first.vote();
+                second.vote();
+                third.vote();
+                sentVote = true;
+            }
+            if (sentVote && votes >= 2) {
+                finished = true;
+            }
+        } else if (votes >= 2) {
+            first.vote();
+            second.vote();
+            third.vote();
+            finished = true;
+        }
+    }
+}
+
+reactiveclass N4 (20) {
+    knownrebecs {
+        Initiator first;
+        N2 second;
+        N3 third;
+    }
+    statevars {
+        boolean initMode;
+        boolean initialSeen;
+        boolean sentVote;
+        boolean finished;
+        int echoes;
+        int votes;
+    }
+
+    N4() {
+        self.start();
+    }
+
+    msgsrv start() {
+        initMode = ?(true, false);
+        initialSeen = false;
+        sentVote = false;
+        finished = false;
+        echoes = 0;
+        votes = 0;
+    }
+
+    msgsrv init() {
+        if (initMode && !initialSeen && !finished) {
+            initialSeen = true;
+            first.echo();
+            second.echo();
+            third.echo();
+            advance();
+        }
+    }
+
+    msgsrv echo() {
+        if (!finished && initMode) {
+            echoes++;
+            advance();
+        }
+    }
+
+    msgsrv vote() {
+        if (!finished) {
+            votes++;
+            advance();
+        }
+    }
+
+    void advance() {
+        if (initMode) {
+            if (initialSeen && echoes >= 2 && !sentVote) {
+                first.vote();
+                second.vote();
+                third.vote();
+                sentVote = true;
+            }
+            if (sentVote && votes >= 2) {
+                finished = true;
+            }
+        } else if (votes >= 2) {
+            first.vote();
+            second.vote();
+            third.vote();
+            finished = true;
+        }
+    }
+}
+
+main {
+    Initiator n1(n2, n3, n4):();
+    N2 n2(n1, n3, n4):();
+    N3 n3(n1, n2, n4):();
+    N4 n4(n1, n2, n3):();
+}

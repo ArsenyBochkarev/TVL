@@ -1,0 +1,71 @@
+reactiveclass A (20) {
+    knownrebecs {
+        Controller controller;
+    }
+
+    A() {
+        self.start();
+    }
+
+    msgsrv start() {
+        controller.tok();
+    }
+
+    msgsrv tok() {
+    }
+}
+
+reactiveclass C (20) {
+    knownrebecs {
+        Controller controller;
+    }
+
+    C() {
+        self.start();
+    }
+
+    msgsrv start() {
+        controller.tok();
+    }
+
+    msgsrv tok() {
+    }
+}
+
+reactiveclass Controller (20) {
+    knownrebecs {
+        A a;
+        C c;
+    }
+    statevars {
+        int received;
+        boolean aFirst;
+    }
+
+    Controller() {
+        received = 0;
+        aFirst = false;
+    }
+
+    msgsrv tok() {
+        if (received == 0) {
+            aFirst = sender == a;
+        }
+        received++;
+        if (received == 2) {
+            if (aFirst) {
+                a.tok();
+                c.tok();
+            } else {
+                c.tok();
+                a.tok();
+            }
+        }
+    }
+}
+
+main {
+    A a(b):();
+    C c(b):();
+    Controller b(a, c):();
+}
