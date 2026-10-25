@@ -138,19 +138,24 @@ class ASTVisitor(val debug: Boolean = false) {
       val s = ctx.send_stmt()
       val qName = getQueueName(s.actor_name().getText, actor)
       val msgName = s.msg_name().getText
-      val sendInstr = IRQueuePush(currentPc, s.getStart.getLine, scheduler, nextPc, qName, msgName)
-
-      var iterPc = currentPc
       val count = if (s.NUMBER() != null) s.NUMBER().getText.toInt else 1
-      for (_ <- 1 until count) {
-        val nextInChain = nextId()
-        val sendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextInChain, qName, msgName)
-        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, sendInstr)
-        iterPc = nextInChain
-      }
 
-      val finalSendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextPc, qName, msgName)
-      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalSendInstr)
+      if (count == 0) {
+        // This should be equivalent to `skip`
+        val skipInstr = IRSkip(currentPc, s.getStart.getLine, scheduler, nextPc)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, skipInstr)
+      } else {
+        var iterPc = currentPc
+        for (_ <- 1 until count) {
+          val nextInChain = nextId()
+          val sendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextInChain, qName, msgName)
+          actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, sendInstr)
+          iterPc = nextInChain
+        }
+
+        val finalSendInstr = IRQueuePush(iterPc, s.getStart.getLine, scheduler, nextPc, qName, msgName)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalSendInstr)
+      }
       nextPc
     }
 
@@ -159,19 +164,26 @@ class ASTVisitor(val debug: Boolean = false) {
       val r = ctx.receive_stmt()
       val qName = getQueueName(actor, r.actor_name().getText)
       val msgName = r.msg_name().getText
-      receiveMap.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName, currentPc)
-
-      var iterPc = currentPc
       val count = if (r.NUMBER() != null) r.NUMBER().getText.toInt else 1
-      for (_ <- 1 until count) {
-        val nextInChain = nextId()
-        val receiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextInChain, qName, msgName)
-        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, receiveInstr)
-        iterPc = nextInChain
-      }
 
-      val finalReceiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextPc, qName, msgName)
-      actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalReceiveInstr)
+      if (count == 0) {
+        // This should be equivalent to `skip`
+        val skipInstr = IRSkip(currentPc, r.getStart.getLine, scheduler, nextPc)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(currentPc, skipInstr)
+      } else {
+        receiveMap.getOrElseUpdate(actor, mutable.Map.empty[String, Int]).update(msgName, currentPc)
+
+        var iterPc = currentPc
+        for (_ <- 1 until count) {
+          val nextInChain = nextId()
+          val receiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextInChain, qName, msgName)
+          actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, receiveInstr)
+          iterPc = nextInChain
+        }
+
+        val finalReceiveInstr = IRQueuePop(iterPc, r.getStart.getLine, scheduler, nextPc, qName, msgName)
+        actorProcedures.getOrElseUpdate(actor, mutable.Map.empty[Int, IRInstruction]).update(iterPc, finalReceiveInstr)
+      }
       nextPc
     }
 
