@@ -21,7 +21,7 @@ if [[ "$1" == "-h" || "$1" == "--help" ]]; then
   echo "                        JSON format (for trace validation / CEGAR)."
   echo "  --no-truncate         (Optional) Do not cut the rendered counterexample at --trace-size."
   echo "  --fairness=...        (Optional) Fairness for verification: 'weak' (default), 'strong',"
-  echo "                        or 'none'. SPIN supports 'weak' and 'none' only."
+  echo "                        or 'none'. SPIN supports 'weak' and 'none' only. Doesn't affect 'parallel'"
   echo "  --workdir=DIR         (--cegar only) Artifacts directory"
   echo "                        (default: <input dir>/cegar-out)."
   echo "  --iterations=N        (--cegar only) Refinement budget (default 20); on exhaustion the"

@@ -18,17 +18,17 @@ There are two formal semantics for TVL language:
 - Target model checker
   - For TLA+, make sure you have `pcal` and `tlc` set, e.g.
     - `~/.local/bin/tlc`:
-      ```
+      ```bash
       #!/bin/bash
       java -cp /path/to/tla2tools.jar tlc2.TLC "$@"
       ```
     - `~/.local/bin/pcal`:
-      ```
+      ```bash
       #!/bin/bash
       java -cp /path/to/tla2tools.jar pcal.trans "$@"
       ```
   - For Curtis, install it via installation script or manually add it on your `PATH`, e.g. `~/.local/bin/curtis`:
-    ```
+    ```bash
     #!/bin/bash
     exec /path/to/Curtis/.lake/build/bin/curtis "$@"
     ```
@@ -65,7 +65,7 @@ translate <input file> <target> [--dump-ir=<path>] [--channel-size=...] [--trace
 - `--dump-ir=<path>` additionally dumps the TVL IR to the given path (works with any target)
 - `--channel-size` / `--trace-size` set the channel size and counterexample size limits
 - `--cegar` enables the CEGAR loop. See [section below](#cegar) for further info
-- `--fairness=weak|strong|none` sets the fairness for all actors (default: `weak`)
+- `--fairness=weak|strong|none` sets the fairness for all actors (default: `weak`). Doesn't affect `parallel` branches
 - The output file is always written next to the input file
 
 Altough it is highly recommended to use [VS Code plugin](https://github.com/ArsenyBochkarev/tvl-vscode).
